@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/bin/python *)",
+      "Bash(npm run *)",
+      "Bash(PYTHONPATH=. ../.venv/bin/python -c \"from app.main import app; print\\('Backend imports OK'\\)\")",
+      "Bash(PYTHONPATH=. ../.venv/bin/python *)",
+      "Bash(chmod +x docker/backend/entrypoint.sh)",
+      "Bash(kill %1)",
+      "Bash(kill 125262)",
+      "Bash(kill 124069)",
+      "Bash(fuser -k 8000/tcp)",
+      "Bash(PYTHONPATH=. ../.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000)",
+      "Bash(curl -s -X POST http://localhost:8000/api/v1/knowledge-bases -H 'Content-Type: application/json' -d '{\"name\":\"Test KB\"}')",
+      "Bash(docker --version)",
+      "Bash(docker compose *)",
+      "Bash(curl -s -X POST http://localhost:8000/api/v1/health)",
+      "Bash(echo \"这是测试文档的内容。用于验证知识库系统的上传功能。\")",
+      "Bash(curl -s -X POST http://localhost:8000/api/v1/knowledge-bases/df40b1a30d59/documents/upload -F files=@/tmp/test.txt)",
+      "Bash(curl -s \"http://localhost:8000/api/v1/knowledge-bases/df40b1a30d59/documents/7074ad823a70/status\")",
+      "Bash(curl -s http://localhost:8000/api/v1/knowledge-bases)",
+      "Bash(PYTHONPATH=. ../.venv/bin/python3 -c ' *)",
+      "Bash(rm -rf /home/ubuntu/project/RAG-Knowledge-System/backend/data)",
+      "Bash(HF_ENDPOINT=https://hf-mirror.com PYTHONPATH=. ../.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000)",
+      "Bash(curl -s -X POST http://localhost:8000/api/v1/knowledge-bases -H \"Content-Type: application/json\" -d '{\"name\":\"测试知识库\"}')",
+      "Bash(curl -s -X POST \"http://localhost:8000/api/v1/knowledge-bases/$\\(curl -s http://localhost:8000/api/v1/knowledge-bases)",
+      "Bash(curl -sI https://hf-mirror.com)",
+      "Bash(curl -sI https://huggingface.co)",
+      "Bash(curl -sI https://modelscope.cn)",
+      "Bash(HF_ENDPOINT=https://hf-mirror.com python3 *)",
+      "Bash(HF_ENDPOINT=https://hf-mirror.com ../.venv/bin/python3 -c ' *)",
+      "Bash(curl *)",
+      "Bash(.venv/bin/python3 -c \"from milvus_lite import server; help\\(server\\)\")",
+      "Bash(../.venv/bin/python3 *)"
+    ]
+  }
+}

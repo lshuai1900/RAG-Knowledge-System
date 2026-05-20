@@ -1,0 +1,24 @@
+__pycache__/
+*.py[cod]
+*.so
+.Python
+.env
+*.log
+.venv/
+venv/
+data/
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Docker
+docker-data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store

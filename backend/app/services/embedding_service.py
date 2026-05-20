@@ -1,4 +1,4 @@
-from langchain_openai import OpenAIEmbeddings
+from openai import AsyncOpenAI
 from app.config import settings
 
 
@@ -7,23 +7,31 @@ class EmbeddingService:
         self.model_name = model_name
         self.api_key = api_key
         self.base_url = base_url
-        self._model: OpenAIEmbeddings | None = None
+        self._client: AsyncOpenAI | None = None
 
-    async def _get_model(self) -> OpenAIEmbeddings:
-        if self._model is None:
-            kwargs = {"model": self.model_name, "api_key": self.api_key}
+    def _get_client(self) -> AsyncOpenAI:
+        if self._client is None:
+            kwargs = {"api_key": self.api_key}
             if self.base_url:
                 kwargs["base_url"] = self.base_url
-            self._model = OpenAIEmbeddings(**kwargs)
-        return self._model
+            self._client = AsyncOpenAI(**kwargs)
+        return self._client
 
     async def embed_query(self, text: str) -> list[float]:
-        model = await self._get_model()
-        return await model.aembed_query(text)
+        client = self._get_client()
+        response = await client.embeddings.create(model=self.model_name, input=text)
+        return response.data[0].embedding
 
     async def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        model = await self._get_model()
-        return await model.aembed_documents(texts)
+        client = self._get_client()
+        # DashScope limits batch size to 10
+        batch_size = 10
+        all_embeddings = []
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i + batch_size]
+            response = await client.embeddings.create(model=self.model_name, input=batch)
+            all_embeddings.extend(item.embedding for item in response.data)
+        return all_embeddings
 
 
 embedding_service = EmbeddingService(

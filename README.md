@@ -10,7 +10,7 @@
 | **后端** | FastAPI (Python)，异步 SSE 流式响应 |
 | **向量数据库** | Milvus Lite（嵌入式，零配置） |
 | **大模型** | DeepSeek，通过 LangChain OpenAI 兼容接口 |
-| **嵌入模型** | OpenAI text-embedding-3-small（API 调用，无需 GPU） |
+| **嵌入模型** | 阿里 DashScope text-embedding-v3（兼容 OpenAI API，无需 GPU） |
 | **前端** | React 19 + TypeScript + Vite + Tailwind CSS 4 |
 | **数据库** | SQLite（aiosqlite 异步驱动） |
 
@@ -25,7 +25,7 @@
 │   │   │   ├── router.py        # 路由聚合
 │   │   │   └── endpoints/       # health / knowledge_base / document / chat
 │   │   ├── services/
-│   │   │   ├── embedding_service.py   # 嵌入 API 封装 (OpenAI Embeddings)
+│   │   │   ├── embedding_service.py   # 嵌入 API 封装 (DashScope)
 │   │   │   ├── llm_service.py         # DeepSeek LLM 封装
 │   │   │   ├── document_service.py    # 文档加载与分块
 │   │   │   ├── ingestion_service.py   # 文档摄入编排（后台任务）
@@ -59,7 +59,7 @@
 - Python 3.12+
 - Node.js 20+
 - DeepSeek API Key（[platform.deepseek.com](https://platform.deepseek.com)）
-- OpenAI API Key（用于嵌入模型，[platform.openai.com](https://platform.openai.com)）
+- 阿里 DashScope API Key（用于嵌入模型，[dashscope.aliyun.com](https://dashscope.aliyun.com)）
 
 ### 1. 后端配置
 
@@ -181,10 +181,10 @@ data: {"message_id": "msg_xxx"}
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `EMBEDDING_API_KEY` | — | **必填**，OpenAI API 密钥 |
-| `EMBEDDING_API_BASE` | `https://api.openai.com/v1` | API 端点（可替换为兼容服务） |
-| `EMBEDDING_MODEL_NAME` | `text-embedding-3-small` | 嵌入模型名称 |
-| `EMBEDDING_DIM` | `1536` | 向量维度（须匹配模型） |
+| `EMBEDDING_API_KEY` | — | **必填**，DashScope API 密钥 |
+| `EMBEDDING_API_BASE` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | API 端点（兼容 OpenAI 格式） |
+| `EMBEDDING_MODEL_NAME` | `text-embedding-v3` | 嵌入模型名称 |
+| `EMBEDDING_DIM` | `1024` | 向量维度（须匹配模型） |
 
 ### 文档处理
 
@@ -218,7 +218,7 @@ data: {"message_id": "msg_xxx"}
 上传文件 → 保存到磁盘 → 异步后台任务
                         ├── LangChain 加载文档
                         ├── 递归文本分块
-                        ├── API 生成嵌入向量 (OpenAI)
+                        ├── API 生成嵌入向量 (DashScope)
                         ├── 插入 Milvus 集合
                         └── 更新状态: pending → processing → ready
 ```

@@ -1,12 +1,27 @@
+# Python
 __pycache__/
 *.py[cod]
 *.so
 .Python
-.env
-*.log
 .venv/
 venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Environment
+.env
+*.log
+
+# SQLite
+*.db
+*.db-shm
+*.db-wal
+
+# Data
 data/
+uploads/
 
 # Node
 node_modules/
@@ -16,9 +31,16 @@ dist/
 # Docker
 docker-data/
 
+# Claude Code
+.claude/
+
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 .DS_Store
+
+# Archives
+*.tgz
+*.tar.gz

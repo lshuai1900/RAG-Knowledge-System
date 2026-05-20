@@ -18,7 +18,7 @@ class EmbeddingService:
                 os.environ['HF_ENDPOINT'] = mirror
             loop = asyncio.get_event_loop()
             self._model = await loop.run_in_executor(
-                None, lambda: SentenceTransformer(self.model_name, device=self.device, trust_remote_code=True)
+                None, lambda: SentenceTransformer(self.model_name, device=self.device, trust_remote_code=settings.EMBEDDING_TRUST_REMOTE_CODE)
             )
         return self._model
 

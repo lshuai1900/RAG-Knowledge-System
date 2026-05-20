@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Book, Plus, Trash2, Loader2 } from 'lucide-react';
 import { listKnowledgeBases, deleteKnowledgeBase } from '../../api/knowledgeBase';
 import { useAppStore } from '../../store/appStore';
@@ -11,7 +11,7 @@ export function KnowledgeBaseList({ onShowForm }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchKBs = async () => {
+  const fetchKBs = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -22,9 +22,10 @@ export function KnowledgeBaseList({ onShowForm }: Props) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [setKnowledgeBases]);
 
-  useEffect(() => { fetchKBs(); }, []);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- zustand store sync
+  useEffect(() => { fetchKBs(); }, [fetchKBs]);
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();

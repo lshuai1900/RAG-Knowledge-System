@@ -18,6 +18,14 @@ async def lifespan(app: FastAPI):
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     os.makedirs("data", exist_ok=True)
 
+    # Recover stuck documents from previous crash
+    from app.db.sqlite_database import get_database
+    db = await get_database()
+    await db.execute(
+        "UPDATE documents SET status = 'failed', error_message = 'Server restarted during ingestion' WHERE status IN ('pending', 'processing')"
+    )
+    await db.commit()
+
     # Warm up embedding model at startup so first upload is fast
     from app.services.embedding_service import embedding_service
     await embedding_service._get_model()

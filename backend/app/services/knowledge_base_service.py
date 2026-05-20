@@ -1,5 +1,9 @@
+import os
+import asyncio
+import shutil
 import uuid
 from datetime import datetime
+from app.config import settings
 from app.db.sqlite_database import get_database
 from app.db.milvus_client import milvus_client
 
@@ -63,3 +67,8 @@ class KnowledgeBaseService:
         await db.execute("DELETE FROM knowledge_bases WHERE id = ?", (kb_id,))
         await db.commit()
         await milvus_client.drop_collection(kb_id)
+
+        kb_dir = os.path.join(settings.UPLOAD_DIR, kb_id)
+        if os.path.exists(kb_dir):
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, shutil.rmtree, kb_dir)

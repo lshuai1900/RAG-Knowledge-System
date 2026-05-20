@@ -3,6 +3,8 @@ import { Upload, Loader2 } from 'lucide-react';
 import { uploadDocuments } from '../../api/document';
 import { useAppStore } from '../../store/appStore';
 
+const ALLOWED_TYPES = ['.pdf', '.txt', '.md', '.docx', '.doc'];
+
 export function DocumentUploader() {
   const { activeKnowledgeBaseId, setIsUploading } = useAppStore();
   const [isDragging, setIsDragging] = useState(false);
@@ -10,12 +12,10 @@ export function DocumentUploader() {
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const allowedTypes = ['.pdf', '.txt', '.md', '.docx', '.doc'];
-
   const handleFiles = useCallback(async (files: FileList) => {
     if (!activeKnowledgeBaseId) return;
     const fileArr = Array.from(files).filter((f) =>
-      allowedTypes.some((ext) => f.name.toLowerCase().endsWith(ext))
+      ALLOWED_TYPES.some((ext) => f.name.toLowerCase().endsWith(ext))
     );
     if (fileArr.length === 0) {
       setError('未选择支持的文件类型');
@@ -33,7 +33,7 @@ export function DocumentUploader() {
       setUploading(false);
       setIsUploading(false);
     }
-  }, [activeKnowledgeBaseId]);
+  }, [activeKnowledgeBaseId, setIsUploading]);
 
   if (!activeKnowledgeBaseId) return null;
 
@@ -49,7 +49,7 @@ export function DocumentUploader() {
     >
       <input
         ref={fileInputRef}
-        type="file" multiple accept={allowedTypes.join(',')}
+        type="file" multiple accept={ALLOWED_TYPES.join(',')}
         className="hidden" onChange={(e) => e.target.files && handleFiles(e.target.files)}
       />
       {uploading ? (

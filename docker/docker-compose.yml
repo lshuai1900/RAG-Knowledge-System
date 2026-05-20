@@ -75,6 +75,7 @@ services:
       - LLM_TEMPERATURE=0.1
       - EMBEDDING_MODEL_NAME=Qwen/Qwen3-Embedding
       - EMBEDDING_DEVICE=cpu
+      - EMBEDDING_TRUST_REMOTE_CODE=true
       - CHUNK_SIZE=1000
       - CHUNK_OVERLAP=200
       - TOP_K=5

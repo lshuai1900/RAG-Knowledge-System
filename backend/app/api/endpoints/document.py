@@ -97,10 +97,10 @@ async def list_documents(kb_id: str, kb_service: KnowledgeBaseService = Depends(
 
 
 @router.get("/{doc_id}/status", response_model=DocumentStatusResponse)
-async def get_document_status(doc_id: str):
+async def get_document_status(kb_id: str, doc_id: str):
     from app.db.sqlite_database import get_database
     db = await get_database()
-    cursor = await db.execute("SELECT status, chunk_count, error_message FROM documents WHERE id = ?", (doc_id,))
+    cursor = await db.execute("SELECT status, chunk_count, error_message FROM documents WHERE id = ? AND kb_id = ?", (doc_id, kb_id))
     row = await cursor.fetchone()
     if not row:
         raise NotFoundException("Document", doc_id)

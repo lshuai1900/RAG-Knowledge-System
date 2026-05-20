@@ -2,6 +2,7 @@ import traceback
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from app.core.exceptions import AppException
+from app.config import settings
 
 
 def register_exception_handlers(app: FastAPI):
@@ -26,7 +27,7 @@ def register_exception_handlers(app: FastAPI):
             content={
                 "detail": {
                     "code": "INTERNAL_ERROR",
-                    "message": str(exc),
+                    "message": str(exc) if settings.DEBUG else "Internal server error",
                     "details": {},
                 }
             },

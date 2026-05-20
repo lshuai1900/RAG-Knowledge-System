@@ -21,8 +21,9 @@ export function DocumentList() {
     } finally {
       setLoading(false);
     }
-  }, [activeKnowledgeBaseId]);
+  }, [activeKnowledgeBaseId, setDocuments]);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- zustand store sync
   useEffect(() => { fetchDocs(); }, [fetchDocs]);
 
   useEffect(() => {

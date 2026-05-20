@@ -4,6 +4,7 @@ import { ChatInput } from './ChatInput';
 import { useStreamChat } from '../../hooks/useStreamChat';
 import { useAppStore } from '../../store/appStore';
 import { createSession, getSession, listSessions } from '../../api/chat';
+import type { Message } from '../../types';
 import { Plus } from 'lucide-react';
 
 export function ChatPanel() {
@@ -18,7 +19,7 @@ export function ChatPanel() {
       try {
         const data = await getSession(activeSessionId);
         // Parse sources JSON strings from backend
-        const messages = (data.messages || []).map((m: any) => ({
+        const messages = (data.messages || []).map((m: Message) => ({
           ...m,
           sources: typeof m.sources === 'string' ? JSON.parse(m.sources) : (m.sources || undefined),
         }));
@@ -38,7 +39,7 @@ export function ChatPanel() {
     try {
       const sessions = await listSessions(activeKnowledgeBaseId);
       setChatSessions(sessions);
-    } catch {}
+    } catch { console.error('Failed to refresh session list'); }
   }, [activeKnowledgeBaseId, setChatSessions]);
 
   const handleSend = async (query: string) => {

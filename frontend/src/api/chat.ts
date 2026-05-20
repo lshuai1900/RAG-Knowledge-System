@@ -1,5 +1,5 @@
 import apiClient from './client';
-import type { ChatSession } from '../types';
+import type { ChatSession, Message } from '../types';
 
 export async function createSession(kbId: string, title?: string): Promise<ChatSession> {
   const res = await apiClient.post('/chat/sessions', { kb_id: kbId, title });
@@ -12,7 +12,7 @@ export async function listSessions(kbId?: string): Promise<ChatSession[]> {
   return res.data;
 }
 
-export async function getSession(sessionId: string): Promise<{ session: ChatSession; messages: any[] }> {
+export async function getSession(sessionId: string): Promise<{ session: ChatSession; messages: Message[] }> {
   const res = await apiClient.get(`/chat/sessions/${sessionId}`);
   return res.data;
 }

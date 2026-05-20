@@ -37,6 +37,7 @@ class IngestionService:
                 embeddings=embeddings,
                 document_name=filename,
                 chunk_indices=chunk_indices,
+                doc_id=doc_id,
             )
 
             await db.execute(
@@ -57,7 +58,7 @@ class IngestionService:
         from app.db.milvus_client import milvus_client
         from app.db.sqlite_database import get_database
 
-        await milvus_client.delete_document_chunks(kb_id, filename)
+        await milvus_client.delete_document_chunks(kb_id, doc_id)
         if os.path.exists(file_path):
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, os.remove, file_path)

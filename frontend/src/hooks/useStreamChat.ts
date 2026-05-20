@@ -20,7 +20,8 @@ export function useStreamChat(): UseStreamChatReturn {
     setStreaming(true);
 
     try {
-      const response = await fetch('/api/v1/chat/query/stream', {
+      const apiBase = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+      const response = await fetch(`${apiBase}/chat/query/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ kb_id: kbId, session_id: sessionId, query }),
@@ -34,7 +35,6 @@ export function useStreamChat(): UseStreamChatReturn {
       const reader = response.body!.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
-      let currentEvent = '';
       let content = '';
 
       while (true) {
@@ -42,43 +42,56 @@ export function useStreamChat(): UseStreamChatReturn {
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
 
-        for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            currentEvent = line.slice(7).trim();
-          } else if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              if (currentEvent === 'chunk') {
-                content += data.text;
-                updateLastAssistantMessage(content);
-              } else if (currentEvent === 'sources') {
-                // Update sources on the streaming message
-                const msgs = useAppStore.getState().messages;
-                const idx = msgs.findIndex((m) => m.id === tempId);
-                if (idx >= 0) {
-                  msgs[idx] = { ...msgs[idx], sources: data.sources };
-                  useAppStore.setState({ messages: [...msgs] });
-                }
-              } else if (currentEvent === 'done') {
-                // Update temp message with real ID
-                const msgs = useAppStore.getState().messages;
-                const idx = msgs.findIndex((m) => m.id === tempId);
-                if (idx >= 0) {
-                  msgs[idx] = { ...msgs[idx], id: data.message_id };
-                  useAppStore.setState({ messages: [...msgs] });
-                }
-              }
-            } catch {
-              // skip parse errors on partial data
+        // SSE events are delimited by double newlines
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop() || '';
+
+        for (const part of parts) {
+          if (!part.trim()) continue;
+          let eventType = '';
+          let dataStr = '';
+
+          for (const line of part.split('\n')) {
+            if (line.startsWith('event: ')) {
+              eventType = line.slice(7).trim();
+            } else if (line.startsWith('data: ')) {
+              dataStr += line.slice(6);
             }
+          }
+
+          if (!dataStr) continue;
+
+          try {
+            const data = JSON.parse(dataStr);
+            if (eventType === 'chunk') {
+              content += data.text;
+              updateLastAssistantMessage(content);
+            } else if (eventType === 'sources') {
+              const msgs = useAppStore.getState().messages;
+              const idx = msgs.findIndex((m) => m.id === tempId);
+              if (idx >= 0) {
+                msgs[idx] = { ...msgs[idx], sources: data.sources };
+                useAppStore.setState({ messages: [...msgs] });
+              }
+            } else if (eventType === 'done') {
+              const msgs = useAppStore.getState().messages;
+              const idx = msgs.findIndex((m) => m.id === tempId);
+              if (idx >= 0) {
+                msgs[idx] = { ...msgs[idx], id: data.message_id };
+                useAppStore.setState({ messages: [...msgs] });
+              }
+            }
+          } catch {
+            // skip parse errors on malformed data
           }
         }
       }
-    } catch (err: any) {
-      if (err.name === 'AbortError') return;
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        useAppStore.setState((s) => ({ messages: s.messages.filter((m) => m.id !== tempId) }));
+        return;
+      }
       updateLastAssistantMessage('错误：获取回复失败，请重试');
     } finally {
       setStreaming(false);

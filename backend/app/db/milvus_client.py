@@ -13,11 +13,15 @@ class MilvusClientWrapper:
     def _connect_sync(self) -> MilvusClient:
         if self._client is not None:
             return self._client
-        sm = milvus_lite.server_manager.server_manager_instance
-        uri = sm.start_and_get_uri(self.db_path)
-        if uri is None:
-            raise RuntimeError(f"Failed to start Milvus Lite server for {self.db_path}")
-        self._client = MilvusClient(uri=uri)
+        if settings.MILVUS_HOST:
+            uri = f"http://{settings.MILVUS_HOST}:{settings.MILVUS_PORT}"
+            self._client = MilvusClient(uri=uri)
+        else:
+            sm = milvus_lite.server_manager.server_manager_instance
+            uri = sm.start_and_get_uri(self.db_path)
+            if uri is None:
+                raise RuntimeError(f"Failed to start Milvus Lite server for {self.db_path}")
+            self._client = MilvusClient(uri=uri)
         return self._client
 
     async def connect(self):
@@ -61,10 +65,10 @@ class MilvusClientWrapper:
             )
 
     async def insert_chunks(self, kb_id: str, texts: list[str], embeddings: list[list[float]],
-                            document_name: str, chunk_indices: list[int]) -> list[int]:
+                            document_name: str, chunk_indices: list[int], doc_id: str = "") -> list[int]:
         client = await self.connect()
         name = self._collection_name(kb_id)
-        data = [{"vector": e, "text": t, "document_name": document_name, "chunk_index": i}
+        data = [{"vector": e, "text": t, "document_name": document_name, "chunk_index": i, "doc_id": doc_id}
                 for e, t, i in zip(embeddings, texts, chunk_indices)]
 
         def _insert():
@@ -100,12 +104,12 @@ class MilvusClientWrapper:
             })
         return hits
 
-    async def delete_document_chunks(self, kb_id: str, document_name: str):
+    async def delete_document_chunks(self, kb_id: str, doc_id: str):
         client = await self.connect()
         name = self._collection_name(kb_id)
         if client.has_collection(name):
             await asyncio.get_event_loop().run_in_executor(
-                None, lambda: client.delete(collection_name=name, filter=f'document_name == "{document_name}"')
+                None, lambda: client.delete(collection_name=name, filter=f'doc_id == "{doc_id}"')
             )
 
 

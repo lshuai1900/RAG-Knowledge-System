@@ -12,7 +12,7 @@ export function ChatSessionList() {
       try {
         const sessions = await listSessions(activeKnowledgeBaseId);
         setChatSessions(sessions);
-      } catch {}
+      } catch { console.error('Failed to list sessions'); }
     })();
   }, [activeKnowledgeBaseId, setChatSessions]);
 
@@ -23,7 +23,7 @@ export function ChatSessionList() {
       await deleteSession(sessionId);
       if (activeSessionId === sessionId) setActiveSession(null);
       setChatSessions(chatSessions.filter((s) => s.id !== sessionId));
-    } catch {}
+    } catch { console.error('Chat session operation failed'); }
   };
 
   const handleNewSession = async () => {
@@ -32,7 +32,7 @@ export function ChatSessionList() {
       const session = await createSession(activeKnowledgeBaseId, '新对话');
       setActiveSession(session.id);
       setChatSessions([session, ...chatSessions]);
-    } catch {}
+    } catch { console.error('Chat session operation failed'); }
   };
 
   if (!activeKnowledgeBaseId) return null;

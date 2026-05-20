@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     DEBUG: bool = False
 
     # Milvus
-    MILVUS_HOST: str = "localhost"
+    MILVUS_HOST: str = ""
     MILVUS_PORT: int = 19530
     MILVUS_DB_PATH: str = "./data/milvus.db"  # Path for Milvus Lite embedded DB
     EMBEDDING_BATCH_SIZE: int = 64
@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     # Embedding model
     EMBEDDING_MODEL_NAME: str = "BAAI/bge-small-zh-v1.5"
     EMBEDDING_DEVICE: str = "cpu"
+    EMBEDDING_TRUST_REMOTE_CODE: bool = False
     HF_ENDPOINT: str = "https://hf-mirror.com"
 
     # Document chunking

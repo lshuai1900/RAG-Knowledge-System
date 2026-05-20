@@ -31,7 +31,11 @@
       "Bash(HF_ENDPOINT=https://hf-mirror.com ../.venv/bin/python3 -c ' *)",
       "Bash(curl *)",
       "Bash(.venv/bin/python3 -c \"from milvus_lite import server; help\\(server\\)\")",
-      "Bash(../.venv/bin/python3 *)"
+      "Bash(../.venv/bin/python3 *)",
+      "Bash(npx eslint *)",
+      "Bash(python -c ' *)",
+      "Bash(ln -sf ../.env .env)",
+      "Bash(sudo docker compose up -d --build)"
     ]
   }
 }

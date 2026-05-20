@@ -43,7 +43,7 @@ export const useAppStore = create<AppState>((set) => ({
   isStreaming: false,
 
   setKnowledgeBases: (kbs) => set({ knowledgeBases: kbs }),
-  setActiveKnowledgeBase: (id) => set({ activeKnowledgeBaseId: id }),
+  setActiveKnowledgeBase: (id) => set({ activeKnowledgeBaseId: id, activeSessionId: null, messages: [] }),
   setIsLoadingKBs: (v) => set({ isLoadingKBs: v }),
 
   setDocuments: (docs) => set({ documents: docs }),

@@ -1,15 +1,9 @@
-import os
-from app.config import settings
-
-# Set HuggingFace mirror BEFORE any other imports that may load models
-if settings.HF_ENDPOINT:
-    os.environ["HF_ENDPOINT"] = settings.HF_ENDPOINT
-
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.router import api_router
 from app.core.exception_handlers import register_exception_handlers
+from app.config import settings
 
 
 @asynccontextmanager
@@ -25,10 +19,6 @@ async def lifespan(app: FastAPI):
         "UPDATE documents SET status = 'failed', error_message = 'Server restarted during ingestion' WHERE status IN ('pending', 'processing')"
     )
     await db.commit()
-
-    # Warm up embedding model at startup so first upload is fast
-    from app.services.embedding_service import embedding_service
-    await embedding_service._get_model()
 
     yield
     # Shutdown: close connections

@@ -35,7 +35,9 @@
       "Bash(npx eslint *)",
       "Bash(python -c ' *)",
       "Bash(ln -sf ../.env .env)",
-      "Bash(sudo docker compose up -d --build)"
+      "Bash(sudo docker compose up -d --build)",
+      "Bash(python3 -m venv /home/ubuntu/project/RAG-Knowledge-System/backend/.venv)",
+      "Bash(/home/ubuntu/project/RAG-Knowledge-System/backend/.venv/bin/pip install *)"
     ]
   }
 }

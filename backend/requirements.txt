@@ -13,14 +13,13 @@ langchain-text-splitters>=0.3.0
 # Document loaders
 pypdf>=4.3.0
 python-docx>=1.1.2
-unstructured>=0.15.0
 docx2txt>=0.8
 
 # Vector database
 pymilvus>=2.4.0
+milvus-lite>=2.4.0
 
-# Embedding model
-sentence-transformers>=3.0.0
+# Embedding via OpenAI API (langchain-openai)
 
 # Database
 aiosqlite>=0.20.0

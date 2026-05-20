@@ -11,9 +11,9 @@ class Settings(BaseSettings):
     # Milvus
     MILVUS_HOST: str = ""
     MILVUS_PORT: int = 19530
-    MILVUS_DB_PATH: str = "./data/milvus.db"  # Path for Milvus Lite embedded DB
+    MILVUS_DB_PATH: str = "./data/milvus.db"
     EMBEDDING_BATCH_SIZE: int = 64
-    EMBEDDING_DIM: int = 512
+    EMBEDDING_DIM: int = 1536
 
     # DeepSeek LLM
     DEEPSEEK_API_KEY: str = ""
@@ -22,11 +22,10 @@ class Settings(BaseSettings):
     LLM_TEMPERATURE: float = 0.1
     LLM_MAX_TOKENS: int = 4096
 
-    # Embedding model
-    EMBEDDING_MODEL_NAME: str = "BAAI/bge-small-zh-v1.5"
-    EMBEDDING_DEVICE: str = "cpu"
-    EMBEDDING_TRUST_REMOTE_CODE: bool = False
-    HF_ENDPOINT: str = "https://hf-mirror.com"
+    # Embedding model (OpenAI-compatible API)
+    EMBEDDING_MODEL_NAME: str = "text-embedding-3-small"
+    EMBEDDING_API_KEY: str = ""
+    EMBEDDING_API_BASE: str = "https://api.openai.com/v1"
 
     # Document chunking
     CHUNK_SIZE: int = 1000

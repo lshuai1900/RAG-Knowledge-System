@@ -19,13 +19,16 @@ class IngestionService:
             await db.commit()
 
             doc_service = DocumentService(chunk_size=settings.CHUNK_SIZE, chunk_overlap=settings.CHUNK_OVERLAP)
-            chunks = await doc_service.load_and_chunk(file_path, file_ext)
+            chunks = await doc_service.load_and_chunk(file_path, file_ext, doc_id=doc_id, filename=filename)
 
             if not chunks:
                 raise ValueError("Document produced no chunks")
 
             texts = [chunk.page_content for chunk in chunks]
             chunk_indices = [chunk.metadata.get("chunk_index", i) for i, chunk in enumerate(chunks)]
+            section_titles = [chunk.metadata.get("section_title", "") for chunk in chunks]
+            section_paths = [chunk.metadata.get("section_path", "") for chunk in chunks]
+            pages = [chunk.metadata.get("page") for chunk in chunks]
 
             # Embedding runs in thread pool internally (via embedding_service)
             embeddings = await embedding_service.embed_documents(texts)
@@ -38,6 +41,9 @@ class IngestionService:
                 document_name=filename,
                 chunk_indices=chunk_indices,
                 doc_id=doc_id,
+                section_titles=section_titles,
+                section_paths=section_paths,
+                pages=pages,
             )
 
             await db.execute(

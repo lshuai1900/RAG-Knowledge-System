@@ -23,6 +23,38 @@ class RAGService:
         self.history_service = ChatHistoryService()
         self.max_history_turns = settings.MAX_HISTORY_TURNS
 
+    @staticmethod
+    def _build_section_annotation(hit: dict) -> str:
+        """Build a section annotation string from hit metadata."""
+        parts = []
+        sp = hit.get("section_path")
+        if sp:
+            parts.append(sp)
+        elif hit.get("section_title"):
+            parts.append(hit["section_title"])
+        page = hit.get("page")
+        if page is not None:
+            parts.append(f"第{page + 1}页")  # PyPDFLoader pages are 0-indexed
+        if parts:
+            return f" ({' | '.join(parts)})"
+        return ""
+
+    @staticmethod
+    def _build_source(hit: dict) -> dict:
+        source = {
+            "content": hit["content"][:300],
+            "document_name": hit["document_name"],
+            "chunk_index": hit["chunk_index"],
+            "score": round(hit["score"], 4),
+        }
+        if hit.get("section_title"):
+            source["section_title"] = hit["section_title"]
+        if hit.get("section_path"):
+            source["section_path"] = hit["section_path"]
+        if hit.get("page") is not None:
+            source["page"] = hit["page"]
+        return source
+
     async def query_stream(self, kb_id: str, session_id: str, query: str) -> AsyncIterator[dict]:
         history = await self.history_service.get_history(session_id, self.max_history_turns * 2)
 
@@ -32,13 +64,11 @@ class RAGService:
         context_parts = []
         sources = []
         for hit in results:
-            context_parts.append(f"[Source: {hit['document_name']}]\n{hit['content']}")
-            sources.append({
-                "content": hit["content"][:300],
-                "document_name": hit["document_name"],
-                "chunk_index": hit["chunk_index"],
-                "score": round(hit["score"], 4),
-            })
+            section_annotation = self._build_section_annotation(hit)
+            context_parts.append(
+                f"[Source: {hit['document_name']}{section_annotation}]\n{hit['content']}"
+            )
+            sources.append(self._build_source(hit))
 
         context = "\n\n---\n\n".join(context_parts) if context_parts else "No relevant documents found."
         system_prompt = SYSTEM_TEMPLATE.format(context=context)
@@ -65,13 +95,11 @@ class RAGService:
         context_parts = []
         sources = []
         for hit in results:
-            context_parts.append(f"[Source: {hit['document_name']}]\n{hit['content']}")
-            sources.append({
-                "content": hit["content"][:300],
-                "document_name": hit["document_name"],
-                "chunk_index": hit["chunk_index"],
-                "score": round(hit["score"], 4),
-            })
+            section_annotation = self._build_section_annotation(hit)
+            context_parts.append(
+                f"[Source: {hit['document_name']}{section_annotation}]\n{hit['content']}"
+            )
+            sources.append(self._build_source(hit))
 
         context = "\n\n---\n\n".join(context_parts) if context_parts else "No relevant documents found."
         system_prompt = SYSTEM_TEMPLATE.format(context=context)

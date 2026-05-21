@@ -28,8 +28,11 @@ class Settings(BaseSettings):
     EMBEDDING_API_BASE: str = "https://api.openai.com/v1"
 
     # Document chunking
+    CHUNK_STRATEGY: str = "semantic"  # "semantic" | "recursive"
     CHUNK_SIZE: int = 1000
-    CHUNK_OVERLAP: int = 200
+    CHUNK_OVERLAP: int = 150
+    MIN_CHUNK_SIZE: int = 100
+    MAX_CHUNK_SIZE: int = 1500
 
     # Retrieval
     TOP_K: int = 5

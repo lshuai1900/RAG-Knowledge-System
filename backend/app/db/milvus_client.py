@@ -65,11 +65,28 @@ class MilvusClientWrapper:
             )
 
     async def insert_chunks(self, kb_id: str, texts: list[str], embeddings: list[list[float]],
-                            document_name: str, chunk_indices: list[int], doc_id: str = "") -> list[int]:
+                            document_name: str, chunk_indices: list[int], doc_id: str = "",
+                            section_titles: list[str] | None = None,
+                            section_paths: list[str] | None = None,
+                            pages: list[int | None] | None = None) -> list[int]:
         client = await self.connect()
         name = self._collection_name(kb_id)
-        data = [{"vector": e, "text": t, "document_name": document_name, "chunk_index": i, "doc_id": doc_id}
-                for e, t, i in zip(embeddings, texts, chunk_indices)]
+        data = []
+        for i, (e, t) in enumerate(zip(embeddings, texts)):
+            record = {
+                "vector": e,
+                "text": t,
+                "document_name": document_name,
+                "chunk_index": chunk_indices[i] if i < len(chunk_indices) else i,
+                "doc_id": doc_id,
+            }
+            if section_titles and i < len(section_titles):
+                record["section_title"] = section_titles[i] or ""
+            if section_paths and i < len(section_paths):
+                record["section_path"] = section_paths[i] or ""
+            if pages and i < len(pages) and pages[i] is not None:
+                record["page"] = pages[i]
+            data.append(record)
 
         def _insert():
             return client.insert(collection_name=name, data=data)
@@ -88,7 +105,10 @@ class MilvusClientWrapper:
         def _search():
             return client.search(
                 collection_name=name, data=[query_vector], limit=top_k,
-                output_fields=["text", "document_name", "chunk_index"],
+                output_fields=[
+                    "text", "document_name", "chunk_index",
+                    "section_title", "section_path", "page", "doc_id",
+                ],
             )
         results = await asyncio.get_event_loop().run_in_executor(None, _search)
 
@@ -100,6 +120,9 @@ class MilvusClientWrapper:
                 "content": entity.get("text", ""),
                 "document_name": entity.get("document_name", ""),
                 "chunk_index": entity.get("chunk_index", 0),
+                "section_title": entity.get("section_title", ""),
+                "section_path": entity.get("section_path", ""),
+                "page": entity.get("page"),
                 "score": float(hit.get("distance", 0)),
             })
         return hits

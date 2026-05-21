@@ -1,8 +1,11 @@
 import os
 import asyncio
+import logging
 import traceback
 from datetime import datetime
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class IngestionService:
@@ -52,6 +55,22 @@ class IngestionService:
             )
             await db.commit()
 
+            # Rebuild BM25 index after successful ingestion
+            if settings.ENABLE_HYBRID_SEARCH:
+                try:
+                    from app.services.bm25_service import bm25_service
+                    chunk_count = await bm25_service.build_index(kb_id)
+                    logger.info(
+                        "[Ingestion] BM25 index rebuilt for kb=%s doc=%s chunk_count=%d",
+                        kb_id, doc_id, chunk_count,
+                    )
+                except Exception as bm25_exc:
+                    logger.warning(
+                        "[Ingestion] BM25 rebuild failed for kb=%s doc=%s: %s — "
+                        "BM25 search will fallback to vector-only",
+                        kb_id, doc_id, bm25_exc,
+                    )
+
         except Exception as e:
             traceback.print_exc()
             await db.execute(
@@ -72,3 +91,18 @@ class IngestionService:
         db = await get_database()
         await db.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
         await db.commit()
+
+        # Rebuild BM25 index after deletion
+        if settings.ENABLE_HYBRID_SEARCH:
+            try:
+                from app.services.bm25_service import bm25_service
+                chunk_count = await bm25_service.build_index(kb_id)
+                logger.info(
+                    "[Ingestion] BM25 index rebuilt after deletion kb=%s doc=%s chunk_count=%d",
+                    kb_id, doc_id, chunk_count,
+                )
+            except Exception as bm25_exc:
+                logger.warning(
+                    "[Ingestion] BM25 rebuild failed after deletion kb=%s doc=%s: %s",
+                    kb_id, doc_id, bm25_exc,
+                )

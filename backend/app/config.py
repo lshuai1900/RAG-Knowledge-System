@@ -50,6 +50,16 @@ class Settings(BaseSettings):
     RERANKER_SCORE_THRESHOLD: float = 0.0  # optional minimum rerank score; 0 = disabled
     RERANKER_TIMEOUT: int = 30  # seconds
 
+    # Hybrid Search (BM25 + Vector)
+    ENABLE_HYBRID_SEARCH: bool = False
+    BM25_TOP_K: int = 20
+    VECTOR_TOP_K: int = 20
+    HYBRID_TOP_K: int = 30
+    HYBRID_ALPHA: float = 0.7  # weight for vector score; (1 - alpha) for BM25
+    BM25_INDEX_PATH: str = "./data/bm25_index"
+    BM25_SCORE_THRESHOLD: float = 0.1  # minimum normalized BM25 score to include in results
+    BM25_MIN_RAW_SCORE: float = 0.3  # minimum raw BM25 score; scores below this mean no real match
+
     # Chat history
     MAX_HISTORY_TURNS: int = 10
 

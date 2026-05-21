@@ -127,6 +127,56 @@ class MilvusClientWrapper:
             })
         return hits
 
+    async def get_all_chunks(self, kb_id: str, batch_size: int = 1000) -> list[dict]:
+        """Retrieve all chunk entities (text + metadata) from a collection.
+
+        Used by BM25 index builder to get the full corpus.
+        """
+        client = await self.connect()
+        name = self._collection_name(kb_id)
+        if not client.has_collection(name):
+            return []
+
+        await self.load_collection(kb_id)
+
+        all_entities = []
+        offset = 0
+        output_fields = [
+            "text", "document_name", "chunk_index",
+            "section_title", "section_path", "page", "doc_id",
+        ]
+
+        def _query_page(_offset, _limit):
+            return client.query(
+                collection_name=name,
+                filter="id >= 0",
+                output_fields=output_fields,
+                limit=_limit,
+                offset=_offset,
+            )
+
+        while True:
+            page = await asyncio.get_event_loop().run_in_executor(
+                None, _query_page, offset, batch_size)
+            if not page:
+                break
+            for entity in page:
+                all_entities.append({
+                    "id": entity.get("id"),
+                    "content": entity.get("text", ""),
+                    "document_name": entity.get("document_name", ""),
+                    "chunk_index": entity.get("chunk_index", 0),
+                    "section_title": entity.get("section_title", ""),
+                    "section_path": entity.get("section_path", ""),
+                    "page": entity.get("page"),
+                    "doc_id": entity.get("doc_id", ""),
+                })
+            if len(page) < batch_size:
+                break
+            offset += batch_size
+
+        return all_entities
+
     async def delete_document_chunks(self, kb_id: str, doc_id: str):
         client = await self.connect()
         name = self._collection_name(kb_id)

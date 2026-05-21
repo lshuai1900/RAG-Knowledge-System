@@ -3,6 +3,7 @@ from typing import AsyncIterator
 from langchain_core.messages import SystemMessage, HumanMessage
 from app.config import settings
 from app.services.retrieval_service import RetrievalService
+from app.services.hybrid_search_service import HybridSearchService
 from app.services.llm_service import llm_service
 from app.services.chat_history_service import ChatHistoryService
 from app.services.reranker_service import reranker_service, RerankerError
@@ -43,6 +44,7 @@ _REASON_MESSAGES = {
 class RAGService:
     def __init__(self):
         self.retrieval = RetrievalService()
+        self.hybrid_search = HybridSearchService()
         self.history_service = ChatHistoryService()
         self.max_history_turns = settings.MAX_HISTORY_TURNS
         self.score_threshold = settings.SIMILARITY_SCORE_THRESHOLD
@@ -51,13 +53,17 @@ class RAGService:
         self.enable_reranker = settings.ENABLE_RERANKER
         self.reranker_top_k = settings.RERANKER_TOP_K
         self.reranker_top_n = settings.RERANKER_TOP_N
+        self.enable_hybrid = settings.ENABLE_HYBRID_SEARCH
 
     # ── Confidence gating ──────────────────────────────────────────
 
     def _check_confidence(self, hits: list[dict]) -> dict:
         """
         Determine if we have enough confidence to call the LLM.
-        Returns {"ok": True} or {"ok": False, "reason": ..., "top_similarity": ...}
+
+        When hybrid search is enabled, uses ``effective_score`` (which
+        accounts for both vector and BM25 signals).  When disabled, uses
+        the original ``raw_score``-based logic from Phase 2.
         """
         if not hits:
             return {
@@ -66,11 +72,17 @@ class RAGService:
                 "top_similarity_score": 0.0,
             }
 
-        # Effective hits have similarity_score >= 1 - threshold (i.e. raw_score <= threshold)
-        effective = [h for h in hits
-                     if h.get("raw_score", 1.0) <= self.score_threshold]
-
-        top_sim = max(h.get("similarity_score", 0.0) for h in hits)
+        if self.enable_hybrid:
+            # Hybrid mode — use effective_score (higher = better)
+            eff_threshold = 1.0 - self.score_threshold
+            effective = [h for h in hits
+                         if h.get("effective_score", h.get("similarity_score", 0.0)) >= eff_threshold]
+            top_sim = max(h.get("effective_score", h.get("similarity_score", 0.0)) for h in hits)
+        else:
+            # Original Phase 2 logic — use raw_score (lower = better)
+            effective = [h for h in hits
+                         if h.get("raw_score", 1.0) <= self.score_threshold]
+            top_sim = max(h.get("similarity_score", 0.0) for h in hits)
 
         if len(effective) < self.min_source_count:
             return {
@@ -137,6 +149,19 @@ class RAGService:
             src["rerank_score"] = hit["rerank_score"]
         if "rerank_rank" in hit:
             src["rerank_rank"] = hit["rerank_rank"]
+        # Hybrid search fields (present only when ENABLE_HYBRID_SEARCH=true)
+        if "retrieval_source" in hit:
+            src["retrieval_source"] = hit["retrieval_source"]
+        if "vector_score" in hit:
+            src["vector_score"] = hit["vector_score"]
+        if "bm25_score" in hit:
+            src["bm25_score"] = hit["bm25_score"]
+        if "bm25_score_norm" in hit:
+            src["bm25_score_norm"] = hit["bm25_score_norm"]
+        if "hybrid_score" in hit:
+            src["hybrid_score"] = hit["hybrid_score"]
+        if "effective_score" in hit:
+            src["effective_score"] = hit["effective_score"]
         return src
 
     # ── Logging ─────────────────────────────────────────────────────
@@ -212,7 +237,10 @@ class RAGService:
         await self.history_service.add_message(session_id, "user", query)
 
         recall_k = self.reranker_top_k if self.enable_reranker else None
-        results = await self.retrieval.search(kb_id, query, top_k=recall_k)
+        if self.enable_hybrid:
+            results = await self.hybrid_search.search(kb_id, query)
+        else:
+            results = await self.retrieval.search(kb_id, query, top_k=recall_k)
 
         # Reranker — re-rank then truncate to top_n (no-op when disabled)
         results = await self._apply_reranker_if_enabled(query, results)
@@ -234,8 +262,13 @@ class RAGService:
             return
 
         # Build context from effective hits only (above threshold)
-        effective = [h for h in results
-                     if h.get("raw_score", 1.0) <= self.score_threshold]
+        if self.enable_hybrid:
+            eff_threshold = 1.0 - self.score_threshold
+            effective = [h for h in results
+                         if h.get("effective_score", h.get("similarity_score", 0.0)) >= eff_threshold]
+        else:
+            effective = [h for h in results
+                         if h.get("raw_score", 1.0) <= self.score_threshold]
         context_parts = []
         sources = []
         for hit in effective:
@@ -274,7 +307,10 @@ class RAGService:
         await self.history_service.add_message(session_id, "user", query)
 
         recall_k = self.reranker_top_k if self.enable_reranker else None
-        results = await self.retrieval.search(kb_id, query, top_k=recall_k)
+        if self.enable_hybrid:
+            results = await self.hybrid_search.search(kb_id, query)
+        else:
+            results = await self.retrieval.search(kb_id, query, top_k=recall_k)
 
         # Reranker — re-rank then truncate to top_n (no-op when disabled)
         results = await self._apply_reranker_if_enabled(query, results)
@@ -294,8 +330,13 @@ class RAGService:
             return resp
 
         # Build context from effective hits only (above threshold)
-        effective = [h for h in results
-                     if h.get("raw_score", 1.0) <= self.score_threshold]
+        if self.enable_hybrid:
+            eff_threshold = 1.0 - self.score_threshold
+            effective = [h for h in results
+                         if h.get("effective_score", h.get("similarity_score", 0.0)) >= eff_threshold]
+        else:
+            effective = [h for h in results
+                         if h.get("raw_score", 1.0) <= self.score_threshold]
         context_parts = []
         sources = []
         for hit in effective:

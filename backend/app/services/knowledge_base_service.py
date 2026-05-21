@@ -72,3 +72,11 @@ class KnowledgeBaseService:
         if os.path.exists(kb_dir):
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, shutil.rmtree, kb_dir)
+
+        # Clean up BM25 index
+        if settings.ENABLE_HYBRID_SEARCH:
+            try:
+                from app.services.bm25_service import bm25_service
+                await bm25_service.delete_index(kb_id)
+            except Exception:
+                pass

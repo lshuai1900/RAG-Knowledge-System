@@ -36,7 +36,19 @@ class Settings(BaseSettings):
 
     # Retrieval
     TOP_K: int = 5
-    SIMILARITY_SCORE_THRESHOLD: float = 0.0
+    SIMILARITY_SCORE_THRESHOLD: float = 0.35  # cosine distance; <= this = relevant
+    MIN_SOURCE_COUNT: int = 1  # minimum relevant sources before calling LLM
+    ANSWER_WITHOUT_SOURCE: bool = False  # if False, refuse to answer when no relevant sources
+
+    # Reranker (DashScope)
+    DASHSCOPE_API_KEY: str = ""  # shared with embedding; fallback to EMBEDDING_API_KEY
+    ENABLE_RERANKER: bool = False
+    RERANKER_PROVIDER: str = "dashscope"
+    RERANKER_MODEL: str = "gte-rerank-v2"
+    RERANKER_TOP_K: int = 20  # how many chunks to recall from Milvus before reranking
+    RERANKER_TOP_N: int = 5   # how many chunks to keep after reranking
+    RERANKER_SCORE_THRESHOLD: float = 0.0  # optional minimum rerank score; 0 = disabled
+    RERANKER_TIMEOUT: int = 30  # seconds
 
     # Chat history
     MAX_HISTORY_TURNS: int = 10

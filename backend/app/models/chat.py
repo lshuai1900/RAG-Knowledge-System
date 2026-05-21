@@ -27,6 +27,12 @@ class QueryRequest(BaseModel):
 
 
 class QueryResponse(BaseModel):
+    model_config = {"extra": "allow"}
+
     answer: str
     sources: list[dict]
-    message_id: str
+    message_id: str = ""
+    confidence: str | None = None
+    reason: str | None = None
+    top_similarity_score: float | None = None
+    threshold: float | None = None

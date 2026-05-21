@@ -142,6 +142,8 @@ class SemanticChunker:
         self.max_chunk_size = max_chunk_size
         self.doc_id = doc_id
         self.document_name = document_name
+        self._short_before = 0
+        self._merged_short = 0
 
     def split_documents(self, documents: list[Document]) -> list[Document]:
         """
@@ -322,7 +324,13 @@ class SemanticChunker:
     # ── Length Control ────────────────────────────────────────────────
 
     def _control_length(self, blocks: list[dict]) -> list[dict]:
-        """Merge short blocks and re-split long ones."""
+        """
+        Merge short blocks and re-split long ones.
+        Two-phase: forward merge, then backward merge for remaining orphans.
+        """
+        short_before = sum(1 for b in blocks if len(b["content"]) < self.min_chunk_size)
+
+        # ── Phase A: forward merge (existing logic) ──
         result = []
         i = 0
         while i < len(blocks):
@@ -330,11 +338,8 @@ class SemanticChunker:
             content_len = len(block["content"])
 
             if content_len < self.min_chunk_size and result:
-                # Merge with previous block. Use the more general (shorter path)
-                # section metadata so the merged chunk represents the broader scope.
                 prev = result[-1]
                 merged_content = prev["content"] + "\n\n" + block["content"]
-                # Prefer the more general section (higher level = smaller level number)
                 if prev["level"] <= block["level"]:
                     merged_title = prev["section_title"]
                     merged_path = prev["section_path"]
@@ -351,14 +356,46 @@ class SemanticChunker:
                     "page": prev.get("page"),
                 }
             elif content_len > self.max_chunk_size:
-                # Re-split by sentence boundaries
-                sub_parts = self._split_by_sentences(
-                    block["content"], block
-                )
+                sub_parts = self._split_by_sentences(block["content"], block)
                 result.extend(sub_parts)
             else:
                 result.append(block)
             i += 1
+
+        # ── Phase B: backward merge — if the first block is still too short,
+        # merge it forward into the next block (or later blocks if needed) ──
+        if result and len(result[0]["content"]) < self.min_chunk_size and len(result) > 1:
+            # Merge result[0] → result[1]; prefer result[1]'s metadata
+            target = result[1]
+            orphan = result[0]
+            merged_content = orphan["content"] + "\n\n" + target["content"]
+            result[1] = {
+                "content": merged_content,
+                "section_title": target["section_title"] or orphan["section_title"],
+                "section_path": target["section_path"] or orphan["section_path"],
+                "level": target["level"],
+                "page": target.get("page"),
+            }
+            result.pop(0)
+
+        # ── Phase C: trailing orphan — if the last block is still too short,
+        # merge it backward into the second-to-last block ──
+        if len(result) > 1 and len(result[-1]["content"]) < self.min_chunk_size:
+            orphan = result.pop()
+            prev = result[-1]
+            merged_content = prev["content"] + "\n\n" + orphan["content"]
+            result[-1] = {
+                "content": merged_content,
+                "section_title": prev["section_title"] or orphan["section_title"],
+                "section_path": prev["section_path"] or orphan["section_path"],
+                "level": prev["level"],
+                "page": prev.get("page"),
+            }
+
+        self._short_before = short_before
+        self._merged_short = short_before - sum(
+            1 for b in result if len(b["content"]) < self.min_chunk_size
+        )
 
         return result
 
@@ -476,7 +513,7 @@ class SemanticChunker:
             return
 
         lengths = [len(doc.page_content) for doc in chunks]
-        short_count = sum(1 for l in lengths if l < self.min_chunk_size)
+        short_after = sum(1 for l in lengths if l < self.min_chunk_size)
         long_count = sum(1 for l in lengths if l > self.max_chunk_size)
         structure_count = sum(
             1 for doc in chunks if doc.metadata.get("section_title")
@@ -484,11 +521,14 @@ class SemanticChunker:
 
         logger.info(
             "[SemanticChunker] document=%s raw_len=%d chunks=%d avg_len=%d "
-            "min_len=%d max_len=%d short_chunks=%d long_chunks=%d "
-            "with_sections=%d",
+            "min_len=%d max_len=%d short_before=%d short_after=%d merged=%d "
+            "long_chunks=%d with_sections=%d",
             self.document_name, raw_len, len(chunks),
             sum(lengths) // len(chunks) if chunks else 0,
             min(lengths) if chunks else 0,
             max(lengths) if chunks else 0,
-            short_count, long_count, structure_count,
+            getattr(self, "_short_before", 0),
+            short_after,
+            getattr(self, "_merged_short", 0),
+            long_count, structure_count,
         )

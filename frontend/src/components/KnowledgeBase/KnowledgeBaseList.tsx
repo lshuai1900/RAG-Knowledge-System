@@ -3,7 +3,7 @@ import { Book, Plus, Trash2, Loader2 } from 'lucide-react';
 import { listKnowledgeBases, deleteKnowledgeBase } from '../../api/knowledgeBase';
 import { useAppStore } from '../../store/appStore';
 import { ConfirmModal } from '../shared/ConfirmModal';
-import { toast } from '../shared/Toast';
+import { toast } from '../shared/toast';
 
 interface Props {
   onShowForm: () => void;

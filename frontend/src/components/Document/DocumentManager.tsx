@@ -4,7 +4,7 @@ import { DocumentUploader } from './DocumentUploader';
 import { DocumentList } from './DocumentList';
 import { IndexStatusPanel } from './IndexStatusPanel';
 import { ConfirmModal } from '../shared/ConfirmModal';
-import { toast } from '../shared/Toast';
+import { toast } from '../shared/toast';
 import { rebuildIndex } from '../../api/knowledgeBase';
 import { useAppStore } from '../../store/appStore';
 import type { RebuildIndexResponse } from '../../types';

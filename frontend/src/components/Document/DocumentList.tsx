@@ -3,7 +3,7 @@ import { Trash2, FileText, Loader2, AlertCircle, CheckCircle2, Clock } from 'luc
 import { listDocuments, deleteDocument } from '../../api/document';
 import { useAppStore } from '../../store/appStore';
 import { ConfirmModal } from '../shared/ConfirmModal';
-import { toast } from '../shared/Toast';
+import { toast } from '../shared/toast';
 
 export function DocumentList() {
   const { activeKnowledgeBaseId, documents, setDocuments } = useAppStore();

@@ -22,12 +22,11 @@ export function IndexStatusPanel() {
     }
   }, [activeKnowledgeBaseId]);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- async status fetch after knowledge base changes
   useEffect(() => { fetchStatus(); }, [fetchStatus]);
 
-  // Refresh when documents change (upload / delete / rebuild)
-  useEffect(() => {
-    fetchStatus();
-  }, [documents, fetchStatus]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- async status fetch after document changes
+  useEffect(() => { fetchStatus(); }, [documents, fetchStatus]);
 
   if (!activeKnowledgeBaseId) return null;
 

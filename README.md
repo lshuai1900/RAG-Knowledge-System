@@ -10,7 +10,7 @@
 | **后端** | FastAPI (Python)，异步 SSE 流式响应 |
 | **向量数据库** | Milvus Lite（嵌入式，零配置） |
 | **大模型** | DeepSeek，通过 LangChain OpenAI 兼容接口 |
-| **嵌入模型** | 阿里 DashScope text-embedding-v3（兼容 OpenAI API，无需 GPU） |
+| **嵌入模型** | 阿里 DashScope text-embedding-v4（兼容 OpenAI API，无需 GPU） |
 | **前端** | React 19 + TypeScript + Vite + Tailwind CSS 4 |
 | **数据库** | SQLite（aiosqlite 异步驱动） |
 
@@ -54,7 +54,7 @@
 
 ### 前置条件
 
-- Python 3.12+
+- Python 3.11+
 - Node.js 20+
 - DeepSeek API Key（[platform.deepseek.com](https://platform.deepseek.com)）
 - 阿里 DashScope API Key（用于嵌入模型，[dashscope.aliyun.com](https://dashscope.aliyun.com)）
@@ -62,6 +62,14 @@
 ### 1. 后端配置
 
 ```bash
+# 在项目根目录创建本地配置文件
+cp .env.example .env
+
+# 编辑 .env，填入 API Key
+# DEEPSEEK_API_KEY=your-deepseek-api-key      （必填，用于问答生成）
+# EMBEDDING_API_KEY=your-dashscope-api-key    （必填，用于 text-embedding-v4）
+# DASHSCOPE_API_KEY=your-dashscope-api-key    （可选，启用 reranker 时使用）
+
 cd backend
 
 # 创建虚拟环境
@@ -70,11 +78,9 @@ source .venv/bin/activate
 
 # 安装依赖
 pip install -r requirements.txt
-
-# 编辑 .env，填入 API Key
-# DEEPSEEK_API_KEY=sk-xxx    （必填）
-# EMBEDDING_API_KEY=sk-xxx   （必填）
 ```
+
+真实 API Key 只写入本地 `.env`，不要提交到 Git。
 
 ### 2. 启动后端
 
@@ -181,7 +187,7 @@ data: {"message_id": "msg_xxx"}
 |------|--------|------|
 | `EMBEDDING_API_KEY` | — | **必填**，DashScope API 密钥 |
 | `EMBEDDING_API_BASE` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | API 端点（兼容 OpenAI 格式） |
-| `EMBEDDING_MODEL_NAME` | `text-embedding-v3` | 嵌入模型名称 |
+| `EMBEDDING_MODEL_NAME` | `text-embedding-v4` | 嵌入模型名称 |
 | `EMBEDDING_DIM` | `1024` | 向量维度（须匹配模型） |
 
 ### 文档处理
@@ -189,7 +195,7 @@ data: {"message_id": "msg_xxx"}
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `CHUNK_SIZE` | `1000` | 文档分块大小（字符数） |
-| `CHUNK_OVERLAP` | `200` | 分块重叠字符数 |
+| `CHUNK_OVERLAP` | `150` | 分块重叠字符数 |
 | `MAX_UPLOAD_SIZE_MB` | `50` | 单文件上传上限 |
 | `UPLOAD_DIR` | `./data/uploads` | 上传文件存储路径 |
 
@@ -206,6 +212,8 @@ data: {"message_id": "msg_xxx"}
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `TOP_K` | `5` | 检索返回最大文档片段数 |
+| `ENABLE_RERANKER` | `false` | 是否启用 DashScope reranker |
+| `DASHSCOPE_API_KEY` | — | 可选，启用 reranker 时使用，可与 `EMBEDDING_API_KEY` 相同 |
 | `MAX_HISTORY_TURNS` | `10` | 对话历史保留轮数 |
 
 ## 架构
@@ -243,6 +251,7 @@ data: {"message_id": "msg_xxx"}
 ### 后端
 
 ```bash
+cp .env.example .env              # 首次运行，在项目根目录执行并填入 API Key
 cd backend
 source .venv/bin/activate
 pip install -r requirements.txt   # 首次运行

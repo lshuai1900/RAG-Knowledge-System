@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { X, CheckCircle, AlertCircle, AlertTriangle } from 'lucide-react';
-
-type ToastType = 'success' | 'error' | 'warning';
+import { setToastHandler, type ToastType } from './toast';
 
 interface ToastItem {
   id: number;
@@ -10,11 +9,6 @@ interface ToastItem {
 }
 
 let toastId = 0;
-let pushToast: ((type: ToastType, message: string) => void) | null = null;
-
-export function toast(type: ToastType, message: string) {
-  pushToast?.(type, message);
-}
 
 export function ToastContainer() {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -28,8 +22,8 @@ export function ToastContainer() {
   }, []);
 
   useEffect(() => {
-    pushToast = addToast;
-    return () => { pushToast = null; };
+    setToastHandler(addToast);
+    return () => { setToastHandler(null); };
   }, [addToast]);
 
   const remove = (id: number) => {

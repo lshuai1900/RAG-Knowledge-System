@@ -1,8 +1,13 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
 class Settings(BaseSettings):
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
+    model_config = {"env_file": str(PROJECT_ROOT / ".env"), "env_file_encoding": "utf-8", "extra": "ignore"}
 
     # App
     APP_NAME: str = "RAG Knowledge System"
@@ -13,7 +18,7 @@ class Settings(BaseSettings):
     MILVUS_PORT: int = 19530
     MILVUS_DB_PATH: str = "./data/milvus.db"
     EMBEDDING_BATCH_SIZE: int = 64
-    EMBEDDING_DIM: int = 1536
+    EMBEDDING_DIM: int = 1024
 
     # DeepSeek LLM
     DEEPSEEK_API_KEY: str = ""
@@ -23,9 +28,9 @@ class Settings(BaseSettings):
     LLM_MAX_TOKENS: int = 4096
 
     # Embedding model (OpenAI-compatible API)
-    EMBEDDING_MODEL_NAME: str = "text-embedding-3-small"
+    EMBEDDING_MODEL_NAME: str = "text-embedding-v4"
     EMBEDDING_API_KEY: str = ""
-    EMBEDDING_API_BASE: str = "https://api.openai.com/v1"
+    EMBEDDING_API_BASE: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
     # Document chunking
     CHUNK_STRATEGY: str = "semantic"  # "semantic" | "recursive"

@@ -177,13 +177,65 @@ class MilvusClientWrapper:
 
         return all_entities
 
-    async def delete_document_chunks(self, kb_id: str, doc_id: str):
+    async def delete_document_chunks(self, kb_id: str, doc_id: str) -> int:
+        """Delete all chunks belonging to *doc_id* from Milvus.
+
+        Returns the number of entities deleted.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
         client = await self.connect()
         name = self._collection_name(kb_id)
-        if client.has_collection(name):
-            await asyncio.get_event_loop().run_in_executor(
-                None, lambda: client.delete(collection_name=name, filter=f'doc_id == "{doc_id}"')
-            )
+        if not client.has_collection(name):
+            logger.info("[Milvus] kb=%s doc=%s — collection not found, skip delete", kb_id, doc_id)
+            return 0
+
+        def _delete():
+            result = client.delete(collection_name=name, filter=f'doc_id == "{doc_id}"')
+            return result
+
+        result = await asyncio.get_event_loop().run_in_executor(None, _delete)
+        count = result.get("delete_count", 0) if isinstance(result, dict) else 0
+        logger.info("[Milvus] kb=%s doc=%s deleted_count=%d", kb_id, doc_id, count)
+        return count
+
+    async def delete_knowledge_base_chunks(self, kb_id: str) -> int:
+        """Delete ALL chunks for a knowledge base without dropping the collection.
+
+        Returns the number of entities deleted.  Returns 0 if the collection
+        does not exist (idempotent).
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        client = await self.connect()
+        name = self._collection_name(kb_id)
+        if not client.has_collection(name):
+            logger.info("[Milvus] kb=%s — collection not found, skip delete", kb_id)
+            return 0
+
+        def _delete():
+            result = client.delete(collection_name=name, filter="id >= 0")
+            return result
+
+        result = await asyncio.get_event_loop().run_in_executor(None, _delete)
+        count = result.get("delete_count", 0) if isinstance(result, dict) else 0
+        logger.info("[Milvus] kb=%s deleted_all_count=%d", kb_id, count)
+        return count
+
+    async def count_chunks(self, kb_id: str) -> int:
+        """Return the number of chunks in a knowledge base collection."""
+        client = await self.connect()
+        name = self._collection_name(kb_id)
+        if not client.has_collection(name):
+            return 0
+        await self.load_collection(kb_id)
+
+        def _count():
+            # Use a lightweight query to count entities
+            stats = client.get_collection_stats(name)
+            return stats.get("row_count", 0)
+
+        return await asyncio.get_event_loop().run_in_executor(None, _count)
 
 
 milvus_client = MilvusClientWrapper()

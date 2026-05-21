@@ -1,5 +1,5 @@
 import apiClient from './client';
-import type { Document } from '../types';
+import type { Document, DeleteDocumentResponse } from '../types';
 
 export async function uploadDocuments(kbId: string, files: File[]): Promise<Document[]> {
   const formData = new FormData();
@@ -20,6 +20,7 @@ export async function getDocumentStatus(kbId: string, docId: string): Promise<{ 
   return res.data;
 }
 
-export async function deleteDocument(kbId: string, docId: string): Promise<void> {
-  await apiClient.delete(`/knowledge-bases/${kbId}/documents/${docId}`);
+export async function deleteDocument(kbId: string, docId: string): Promise<DeleteDocumentResponse> {
+  const res = await apiClient.delete(`/knowledge-bases/${kbId}/documents/${docId}`);
+  return res.data;
 }

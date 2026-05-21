@@ -2,11 +2,15 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { Trash2, FileText, Loader2, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
 import { listDocuments, deleteDocument } from '../../api/document';
 import { useAppStore } from '../../store/appStore';
+import { ConfirmModal } from '../shared/ConfirmModal';
+import { toast } from '../shared/Toast';
 
 export function DocumentList() {
   const { activeKnowledgeBaseId, documents, setDocuments } = useAppStore();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchDocs = useCallback(async () => {
@@ -48,13 +52,21 @@ export function DocumentList() {
     };
   }, [documents, fetchDocs]);
 
-  const handleDelete = async (docId: string) => {
-    if (!activeKnowledgeBaseId || !confirm('确定删除此文档？')) return;
+  const handleDeleteConfirm = async () => {
+    if (!activeKnowledgeBaseId || !deleteTarget) return;
+    setDeleting(true);
     try {
-      await deleteDocument(activeKnowledgeBaseId, docId);
+      const result = await deleteDocument(activeKnowledgeBaseId, deleteTarget);
+      if (result.warnings.length > 0) {
+        result.warnings.forEach((w) => toast('warning', w));
+      }
+      toast('success', '文档已删除');
+      setDeleteTarget(null);
       fetchDocs();
     } catch {
-      alert('删除失败');
+      toast('error', '删除文档失败');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -73,29 +85,41 @@ export function DocumentList() {
   if (error) return <div className="text-sm text-red-500 px-2">{error}</div>;
 
   return (
-    <div className="space-y-1">
-      {documents.length === 0 ? (
-        <p className="text-sm text-gray-400 px-2">暂无文档</p>
-      ) : (
-        documents.map((doc) => (
-          <div key={doc.id} className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-gray-50 group">
-            <FileText className="w-4 h-4 text-gray-400 flex-shrink-0" />
-            <div className="flex-1 min-w-0">
-              <div className="text-sm text-gray-700 truncate">{doc.filename}</div>
-              <div className="flex items-center gap-1">
-                {statusIcon(doc.status)}
-                <span className="text-xs text-gray-400">
-                  {doc.status === 'ready' ? `${doc.chunk_count} 个文本块` : doc.status}
-                </span>
+    <>
+      <ConfirmModal
+        open={deleteTarget !== null}
+        title="删除文档"
+        message="确定删除此文档？删除将同步清理向量索引和 BM25 索引。"
+        confirmLabel="确认删除"
+        danger
+        loading={deleting}
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setDeleteTarget(null)}
+      />
+      <div className="space-y-1">
+        {documents.length === 0 ? (
+          <p className="text-sm text-gray-400 px-2">暂无文档</p>
+        ) : (
+          documents.map((doc) => (
+            <div key={doc.id} className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-gray-50 group">
+              <FileText className="w-4 h-4 text-gray-400 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm text-gray-700 truncate">{doc.filename}</div>
+                <div className="flex items-center gap-1">
+                  {statusIcon(doc.status)}
+                  <span className="text-xs text-gray-400">
+                    {doc.status === 'ready' ? `${doc.chunk_count} 个文本块` : doc.status}
+                  </span>
+                </div>
               </div>
+              <Trash2
+                className="w-3.5 h-3.5 text-gray-300 hover:text-red-500 cursor-pointer flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={() => setDeleteTarget(doc.id)}
+              />
             </div>
-            <Trash2
-              className="w-3.5 h-3.5 text-gray-300 hover:text-red-500 cursor-pointer flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-              onClick={() => handleDelete(doc.id)}
-            />
-          </div>
-        ))
-      )}
-    </div>
+          ))
+        )}
+      </div>
+    </>
   );
 }

@@ -38,8 +38,7 @@
 │   │   │   └── sqlite_database.py  # SQLite 表结构与操作
 │   │   ├── models/              # Pydantic 请求/响应模型
 │   │   └── core/                # 异常处理、依赖注入
-│   ├── requirements.txt
-│   └── Dockerfile
+│   └── requirements.txt
 ├── frontend/
 │   ├── src/
 │   │   ├── components/          # Chat / Document / KnowledgeBase / Layout
@@ -49,7 +48,6 @@
 │   │   └── types/               # TypeScript 类型定义
 │   ├── package.json
 │   └── vite.config.ts
-└── docker/                      # Docker Compose 配置（可选）
 ```
 
 ## 快速开始
@@ -92,7 +90,7 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev -- --host 0.0.0.0 --port 5173
 ```
 
 前端运行在 http://localhost:5173（Vite 代理 `/api` → `localhost:8000`）
@@ -238,19 +236,30 @@ data: {"message_id": "msg_xxx"}
 - **Milvus Lite** (`data/milvus.db`) — 文档向量与文本，单文件嵌入式存储
 - **本地磁盘** (`data/uploads/`) — 原始上传文件
 
-## Docker 部署
+## 手动启动
 
-项目默认使用 Milvus Lite 嵌入式模式，无需 Docker 即可直接运行。
+项目使用 Milvus Lite 嵌入式模式，无需 Docker，直接运行即可。
 
-需要容器化部署时：
+### 后端
 
 ```bash
-# 完整基础设施 (etcd + minio + milvus-standalone + backend + frontend)
-docker compose -f docker/docker-compose.yml up --build
-
-# 开发模式 (热重载)
-docker compose -f docker/docker-compose.dev.yml up
+cd backend
+source .venv/bin/activate
+pip install -r requirements.txt   # 首次运行
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
+
+后端运行在 http://localhost:8000，API 文档 http://localhost:8000/docs
+
+### 前端
+
+```bash
+cd frontend
+npm install                       # 首次运行
+npm run dev -- --host 0.0.0.0 --port 5173
+```
+
+前端运行在 http://localhost:5173（Vite 代理 `/api` → `localhost:8000`）
 
 ## License
 

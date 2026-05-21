@@ -248,8 +248,85 @@ class BM25Service:
             shutil.rmtree(kb_dir)
             logger.info("[BM25] kb=%s index deleted", kb_id)
 
+    async def delete_document_chunks(self, kb_id: str, doc_id: str) -> int:
+        """Remove all chunks belonging to *doc_id* from the BM25 index.
+
+        Loads the existing index, filters out the target document's chunks,
+        rebuilds the BM25 model from the remaining corpus, and persists.
+
+        Returns the number of chunks removed.  Returns 0 if the index does
+        not exist (idempotent).
+        """
+        idx_file = self._index_file(kb_id)
+        chunks_file = self._chunks_file(kb_id)
+
+        if not os.path.exists(idx_file) or not os.path.exists(chunks_file):
+            logger.info(
+                "[BM25] kb=%s doc=%s — index not found, skip delete",
+                kb_id, doc_id,
+            )
+            return 0
+
+        loop = asyncio.get_event_loop()
+        all_chunks = await loop.run_in_executor(
+            None, self._load_chunks_sync, kb_id)
+
+        original_count = len(all_chunks)
+        kept_chunks = [
+            c for c in all_chunks
+            if c.get("doc_id") != doc_id
+        ]
+        removed_count = original_count - len(kept_chunks)
+
+        if removed_count == 0:
+            logger.info(
+                "[BM25] kb=%s doc=%s — no chunks found in index",
+                kb_id, doc_id,
+            )
+            return 0
+
+        if not kept_chunks:
+            # No chunks left — remove the index entirely
+            await loop.run_in_executor(None, self._delete_index_sync, kb_id)
+            logger.info(
+                "[BM25] kb=%s doc=%s removed_count=%d — index empty, deleted",
+                kb_id, doc_id, removed_count,
+            )
+            return removed_count
+
+        # Rebuild BM25 from remaining chunks
+        tokenized_corpus = [_tokenize(c["content"]) for c in kept_chunks]
+        bm25 = BM25Okapi(tokenized_corpus)
+
+        kb_dir = self._kb_dir(kb_id)
+        os.makedirs(kb_dir, exist_ok=True)
+        await loop.run_in_executor(
+            None,
+            self._save_index_sync,
+            kb_id,
+            bm25,
+            tokenized_corpus,
+            kept_chunks,
+        )
+
+        logger.info(
+            "[BM25] kb=%s doc=%s removed_count=%d remaining=%d",
+            kb_id, doc_id, removed_count, len(kept_chunks),
+        )
+        return removed_count
+
     async def index_exists(self, kb_id: str) -> bool:
         return os.path.exists(self._index_file(kb_id))
+
+    async def get_chunk_count(self, kb_id: str) -> int:
+        """Return the number of chunks currently in the BM25 index."""
+        chunks_file = self._chunks_file(kb_id)
+        if not os.path.exists(chunks_file):
+            return 0
+        loop = asyncio.get_event_loop()
+        chunks = await loop.run_in_executor(
+            None, self._load_chunks_sync, kb_id)
+        return len(chunks)
 
 
 bm25_service = BM25Service()

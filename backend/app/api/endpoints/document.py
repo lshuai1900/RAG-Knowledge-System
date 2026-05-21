@@ -3,7 +3,9 @@ import uuid
 import asyncio
 from datetime import datetime
 from fastapi import APIRouter, UploadFile, File, Depends
-from app.models.document import DocumentResponse, DocumentStatusResponse
+from app.models.document import (
+    DocumentResponse, DocumentStatusResponse, DeleteDocumentResponse,
+)
 from app.services.ingestion_service import IngestionService
 from app.services.knowledge_base_service import KnowledgeBaseService
 from app.core.exceptions import NotFoundException, ValidationException
@@ -107,16 +109,28 @@ async def get_document_status(kb_id: str, doc_id: str):
     return {"status": row[0], "chunk_count": row[1] or 0, "error_message": row[2]}
 
 
-@router.delete("/{doc_id}", status_code=204)
+@router.delete("/{doc_id}", response_model=DeleteDocumentResponse)
 async def delete_document(
     kb_id: str,
     doc_id: str,
     ingestion_service: IngestionService = Depends(get_ingestion_service),
 ):
+    """Delete a document and all its index data (Milvus + BM25).
+
+    Returns detailed result including whether each index was cleaned.
+    Idempotent: deleting an already-deleted document returns success with
+    a warning rather than an error.
+    """
     from app.db.sqlite_database import get_database
     db = await get_database()
-    cursor = await db.execute("SELECT filename, file_path FROM documents WHERE id = ? AND kb_id = ?", (doc_id, kb_id))
+    cursor = await db.execute(
+        "SELECT filename, file_path FROM documents WHERE id = ? AND kb_id = ?",
+        (doc_id, kb_id),
+    )
     row = await cursor.fetchone()
     if not row:
-        raise NotFoundException("Document", doc_id)
-    await ingestion_service.delete_document_data(kb_id, doc_id, row[0], row[1])
+        # Idempotent: document already removed from DB.
+        # Still clean up any residual index entries.
+        return await ingestion_service.cleanup_orphan_document(kb_id, doc_id)
+
+    return await ingestion_service.delete_document_data(kb_id, doc_id, row[0], row[1])

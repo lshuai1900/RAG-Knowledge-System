@@ -1,0 +1,73 @@
+import { useEffect, useState, useCallback } from 'react';
+import { X, CheckCircle, AlertCircle, AlertTriangle } from 'lucide-react';
+
+type ToastType = 'success' | 'error' | 'warning';
+
+interface ToastItem {
+  id: number;
+  type: ToastType;
+  message: string;
+}
+
+let toastId = 0;
+let pushToast: ((type: ToastType, message: string) => void) | null = null;
+
+export function toast(type: ToastType, message: string) {
+  pushToast?.(type, message);
+}
+
+export function ToastContainer() {
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+
+  const addToast = useCallback((type: ToastType, message: string) => {
+    const id = ++toastId;
+    setToasts((prev) => [...prev, { id, type, message }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4000);
+  }, []);
+
+  useEffect(() => {
+    pushToast = addToast;
+    return () => { pushToast = null; };
+  }, [addToast]);
+
+  const remove = (id: number) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  if (toasts.length === 0) return null;
+
+  const icon = (type: ToastType) => {
+    switch (type) {
+      case 'success': return <CheckCircle className="w-4 h-4 text-green-500" />;
+      case 'error': return <AlertCircle className="w-4 h-4 text-red-500" />;
+      case 'warning': return <AlertTriangle className="w-4 h-4 text-yellow-500" />;
+    }
+  };
+
+  const bg = (type: ToastType) => {
+    switch (type) {
+      case 'success': return 'bg-green-50 border-green-200';
+      case 'error': return 'bg-red-50 border-red-200';
+      case 'warning': return 'bg-yellow-50 border-yellow-200';
+    }
+  };
+
+  return (
+    <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 max-w-sm">
+      {toasts.map((t) => (
+        <div
+          key={t.id}
+          className={`flex items-start gap-2 px-4 py-3 rounded-lg border shadow-lg text-sm ${bg(t.type)}`}
+        >
+          <span className="flex-shrink-0 mt-0.5">{icon(t.type)}</span>
+          <span className="flex-1 text-gray-700 whitespace-pre-wrap">{t.message}</span>
+          <button className="flex-shrink-0 text-gray-400 hover:text-gray-600" onClick={() => remove(t.id)}>
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}

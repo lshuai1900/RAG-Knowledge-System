@@ -1,5 +1,5 @@
 import apiClient from './client';
-import type { KnowledgeBase, CreateKnowledgeBaseRequest } from '../types';
+import type { KnowledgeBase, CreateKnowledgeBaseRequest, DeleteKnowledgeBaseResponse, RebuildIndexResponse, IndexStatusResponse } from '../types';
 
 export async function listKnowledgeBases(): Promise<KnowledgeBase[]> {
   const res = await apiClient.get('/knowledge-bases');
@@ -21,6 +21,17 @@ export async function updateKnowledgeBase(id: string, data: Partial<CreateKnowle
   return res.data;
 }
 
-export async function deleteKnowledgeBase(id: string): Promise<void> {
-  await apiClient.delete(`/knowledge-bases/${id}`);
+export async function deleteKnowledgeBase(id: string): Promise<DeleteKnowledgeBaseResponse> {
+  const res = await apiClient.delete(`/knowledge-bases/${id}`);
+  return res.data;
+}
+
+export async function rebuildIndex(kbId: string): Promise<RebuildIndexResponse> {
+  const res = await apiClient.post(`/knowledge-bases/${kbId}/rebuild-index`);
+  return res.data;
+}
+
+export async function getIndexStatus(kbId: string): Promise<IndexStatusResponse> {
+  const res = await apiClient.get(`/knowledge-bases/${kbId}/index-status`);
+  return res.data;
 }

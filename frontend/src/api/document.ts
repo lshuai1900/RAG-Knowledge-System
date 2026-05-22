@@ -5,7 +5,7 @@ export async function uploadDocuments(kbId: string, files: File[]): Promise<Docu
   const formData = new FormData();
   files.forEach((f) => formData.append('files', f));
   const res = await apiClient.post(`/knowledge-bases/${kbId}/documents/upload`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 120000,
   });
   return res.data;
 }

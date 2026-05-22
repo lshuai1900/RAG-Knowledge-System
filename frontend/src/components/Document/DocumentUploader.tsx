@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import axios from 'axios';
 import { Upload, Loader2 } from 'lucide-react';
 import { uploadDocuments } from '../../api/document';
 import { useAppStore } from '../../store/appStore';
@@ -27,8 +28,9 @@ export function DocumentUploader() {
     try {
       await uploadDocuments(activeKnowledgeBaseId, fileArr);
       window.dispatchEvent(new CustomEvent('documents-changed'));
-    } catch {
-      setError('上传失败');
+    } catch (err) {
+      const detail = axios.isAxiosError(err) ? err.response?.data?.detail : null;
+      setError(detail?.message || '上传失败');
     } finally {
       setUploading(false);
       setIsUploading(false);

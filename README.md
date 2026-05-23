@@ -223,11 +223,14 @@ npm run dev -- --host 0.0.0.0 --port 5173
 | --- | --- | --- |
 | `APP_NAME` | `RAG Knowledge System` | FastAPI 应用名称 |
 | `DEBUG` | `false` | 是否开启调试模式 |
+| `RAG_ENGINE` | `rag_lab` | RAG 引擎：`rag_lab` 使用本地 numpy 向量索引；`legacy` 使用 Milvus/BM25 |
 | `DEEPSEEK_API_KEY` | - | **必填**，DeepSeek API Key |
 | `DEEPSEEK_API_BASE` | `https://api.deepseek.com/v1` | DeepSeek OpenAI 兼容接口地址 |
 | `DEEPSEEK_MODEL_NAME` | `deepseek-chat` | 对话模型名称 |
 | `LLM_TEMPERATURE` | `0.1` | 生成温度 |
 | `LLM_MAX_TOKENS` | `4096` | 最大生成 Token 数 |
+
+> 当 `RAG_ENGINE=rag_lab` 时，检索使用 `backend/rag_lab/data/index` 的本地向量索引，**不会使用**原有 Hybrid Search（BM25 + Vector）。`ENABLE_HYBRID_SEARCH` 等配置在该模式下会被忽略。
 
 ### Embedding 与向量库
 
@@ -364,6 +367,9 @@ data: {"message_id": "msg_xxx"}
 | Milvus Lite 向量库 | `data/milvus.db` | 文档向量、文本片段与元数据 |
 | BM25 索引 | `data/bm25_index/` | 混合检索所需关键词索引 |
 | 上传原文件 | `data/uploads/` | 用户上传的原始文档 |
+| rag_lab 文档副本 | `backend/rag_lab/data/docs/` | rag_lab 模式下用于构建本地索引的文档副本 |
+| rag_lab 分块 | `backend/rag_lab/data/chunks/chunks.json` | rag_lab 模式下生成的分块数据 |
+| rag_lab 向量索引 | `backend/rag_lab/data/index/` | rag_lab 模式下的本地 numpy 向量索引 |
 
 > `data/` 为运行时数据目录，通常不建议提交到 Git。
 

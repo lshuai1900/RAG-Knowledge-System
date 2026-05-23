@@ -8,8 +8,18 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
+def _resolve_rag_engine() -> str:
+    engine = os.getenv("RAG_ENGINE", "rag_lab").strip().lower()
+    return "rag_lab" if engine not in {"rag_lab", "legacy"} else engine
+
+
 class IngestionService:
     async def ingest_document(self, kb_id: str, doc_id: str, file_path: str, file_ext: str, filename: str) -> None:
+        if _resolve_rag_engine() == "rag_lab":
+            from app.services.rag_lab_adapter_service import RagLabAdapterService
+            await RagLabAdapterService().ingest_document(kb_id, doc_id, file_path, file_ext, filename)
+            return
+
         from app.db.sqlite_database import get_database
         from app.services.document_service import DocumentService
         from app.services.embedding_service import embedding_service
@@ -87,6 +97,10 @@ class IngestionService:
 
         Returns a result dict suitable for DeleteDocumentResponse.
         """
+        if _resolve_rag_engine() == "rag_lab":
+            from app.services.rag_lab_adapter_service import RagLabAdapterService
+            return await RagLabAdapterService().delete_document_data(kb_id, doc_id, filename, file_path)
+
         from app.db.milvus_client import milvus_client
         from app.db.sqlite_database import get_database
 
@@ -171,6 +185,10 @@ class IngestionService:
         but residual chunks may still exist in Milvus or BM25.  Returns a
         success result with a warning that the document was already deleted.
         """
+        if _resolve_rag_engine() == "rag_lab":
+            from app.services.rag_lab_adapter_service import RagLabAdapterService
+            return await RagLabAdapterService().cleanup_orphan_document(kb_id, doc_id)
+
         from app.db.milvus_client import milvus_client
 
         result = {
@@ -219,6 +237,10 @@ class IngestionService:
 
         A single broken document file does NOT abort the whole rebuild.
         """
+        if _resolve_rag_engine() == "rag_lab":
+            from app.services.rag_lab_adapter_service import RagLabAdapterService
+            return await RagLabAdapterService().rebuild_kb_index(kb_id)
+
         from app.db.sqlite_database import get_database
         from app.db.milvus_client import milvus_client
         from app.services.document_service import DocumentService

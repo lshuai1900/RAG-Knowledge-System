@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import AsyncIterator
 from langchain_core.messages import SystemMessage, HumanMessage
 from app.config import settings
@@ -7,6 +8,7 @@ from app.services.hybrid_search_service import HybridSearchService
 from app.services.llm_service import llm_service
 from app.services.chat_history_service import ChatHistoryService
 from app.services.reranker_service import reranker_service, RerankerError
+from app.services.rag_lab_adapter_service import RagLabAdapterService
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +43,15 @@ _REASON_MESSAGES = {
 }
 
 
-class RAGService:
+def _resolve_rag_engine() -> str:
+    engine = os.getenv("RAG_ENGINE", "rag_lab").strip().lower()
+    if engine not in {"rag_lab", "legacy"}:
+        logger.warning("[RAG] Unknown RAG_ENGINE=%s; falling back to rag_lab", engine)
+        return "rag_lab"
+    return engine
+
+
+class LegacyRAGService:
     def __init__(self):
         self.retrieval = RetrievalService()
         self.hybrid_search = HybridSearchService()
@@ -364,3 +374,19 @@ class RAGService:
             "top_similarity_score": decision.get("top_similarity_score", 0.0),
             "threshold": self.score_threshold,
         }
+
+
+class RAGService:
+    def __init__(self):
+        self.engine = _resolve_rag_engine()
+        if self.engine == "legacy":
+            self._impl = LegacyRAGService()
+        else:
+            self._impl = RagLabAdapterService()
+
+    async def query(self, kb_id: str, session_id: str, query: str) -> dict:
+        return await self._impl.query(kb_id, session_id, query)
+
+    async def query_stream(self, kb_id: str, session_id: str, query: str) -> AsyncIterator[dict]:
+        async for event in self._impl.query_stream(kb_id, session_id, query):
+            yield event

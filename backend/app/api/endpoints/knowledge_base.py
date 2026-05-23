@@ -1,3 +1,5 @@
+import os
+
 from fastapi import APIRouter, Depends
 from app.models.knowledge_base import KnowledgeBaseCreate, KnowledgeBaseUpdate, KnowledgeBaseResponse
 from app.models.document import (
@@ -88,6 +90,10 @@ async def get_index_status(
     kb = await kb_service.get_by_id(kb_id)
     if not kb:
         raise NotFoundException("Knowledge base", kb_id)
+
+    if os.getenv("RAG_ENGINE", "rag_lab").strip().lower() == "rag_lab":
+        from app.services.rag_lab_adapter_service import RagLabAdapterService
+        return await RagLabAdapterService().get_index_status(kb_id)
 
     from app.db.sqlite_database import get_database
     from app.db.milvus_client import milvus_client

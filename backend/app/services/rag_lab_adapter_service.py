@@ -10,12 +10,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, AsyncIterator
 
-from langchain_core.messages import HumanMessage, SystemMessage
-
 from app.config import settings
 from app.db.sqlite_database import get_database
 from app.services.chat_history_service import ChatHistoryService
-from app.services.llm_service import llm_service
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 RAG_LAB_DIR = BACKEND_DIR / "rag_lab"
@@ -27,27 +24,16 @@ for candidate in (BACKEND_DIR, RAG_LAB_DIR):
     if str(candidate) not in sys.path:
         sys.path.insert(0, str(candidate))
 
-from yuxi_rag.chunker import chunk_paragraphs, save_chunks  # noqa: E402
-from yuxi_rag.embeddings import EmbeddingClient  # noqa: E402
+from yuxi_rag import pipeline  # noqa: E402
+from yuxi_rag.chunker import save_chunks  # noqa: E402
+from yuxi_rag.generator import AnswerGenerator  # noqa: E402
 from yuxi_rag.loader import load_documents  # noqa: E402
-from yuxi_rag.parser import parse_documents  # noqa: E402
 from yuxi_rag.reranker import rerank_if_available  # noqa: E402
 from yuxi_rag.retriever import Retriever  # noqa: E402
 from yuxi_rag.vector_store import LocalVectorStore  # noqa: E402
 
 logger = logging.getLogger(__name__)
 _index_lock = asyncio.Lock()
-
-SYSTEM_TEMPLATE = """You are a helpful assistant. You answer questions based ONLY on the provided document context.
-
-=== STRICT RULES ===
-1. You may ONLY use the context below to answer. Do NOT use external knowledge.
-2. If the context does not contain enough information to answer, clearly state: "根据现有资料无法回答该问题".
-3. Every key factual claim must be supported by the provided context.
-4. Cite sources using [Source: document_name].
-
-=== CONTEXT ===
-{context}"""
 
 _INSUFFICIENT_ANSWER = (
     "当前知识库中没有找到足够相关的资料，无法基于现有文档回答该问题。"
@@ -65,6 +51,7 @@ class RagLabAdapterService:
         self.enable_reranker = settings.ENABLE_RERANKER
         self.reranker_top_k = settings.RERANKER_TOP_K
         self.reranker_top_n = settings.RERANKER_TOP_N
+        self.answer_generator = AnswerGenerator()
 
     def _copied_name(self, kb_id: str, doc_id: str, filename: str) -> str:
         return f"{kb_id}_{doc_id}_{Path(filename).name}"
@@ -139,23 +126,18 @@ class RagLabAdapterService:
                 embeddings_path.unlink()
             return {"documents": 0, "paragraphs": 0, "chunks": 0, "embedding_dim": 0}
 
-        paragraphs = parse_documents(docs)
-        chunks = chunk_paragraphs(
-            paragraphs,
+        result = await pipeline.build_index(
+            docs_dir=RAG_LAB_DOCS_DIR,
+            index_dir=RAG_LAB_INDEX_DIR,
+            chunks_path=RAG_LAB_CHUNKS_PATH,
             chunk_size=settings.CHUNK_SIZE,
             chunk_overlap=settings.CHUNK_OVERLAP,
         )
-        if not chunks:
-            raise RuntimeError("Documents were loaded but no chunks were produced")
-
-        save_chunks(chunks, RAG_LAB_CHUNKS_PATH)
-        embeddings = await EmbeddingClient().embed_documents([chunk.chunk_text for chunk in chunks])
-        LocalVectorStore(RAG_LAB_INDEX_DIR).save(embeddings, chunks)
         return {
-            "documents": len(docs),
-            "paragraphs": len(paragraphs),
-            "chunks": len(chunks),
-            "embedding_dim": len(embeddings[0]) if embeddings else 0,
+            "documents": int(result.get("documents", 0)),
+            "paragraphs": int(result.get("paragraphs", 0)),
+            "chunks": int(result.get("chunks", 0)),
+            "embedding_dim": int(result.get("embedding_dim", 0)),
         }
 
     def _count_chunks_for_doc(self, kb_id: str, doc_id: str) -> int:
@@ -353,7 +335,8 @@ class RagLabAdapterService:
         }
 
     async def _retrieve(self, kb_id: str, query: str) -> list[dict[str, Any]]:
-        if not (RAG_LAB_INDEX_DIR / "embeddings.npy").exists():
+        store = LocalVectorStore(RAG_LAB_INDEX_DIR)
+        if not store.exists():
             return []
         top_k = self.reranker_top_k if self.enable_reranker else settings.TOP_K
         recall_k = max(top_k * 5, self.reranker_top_k, settings.TOP_K)
@@ -416,31 +399,23 @@ class RagLabAdapterService:
             src["rerank_rank"] = result["rerank_rank"]
         return src
 
-    def _build_context(self, sources: list[dict[str, Any]]) -> str:
-        parts = []
-        for source in sources:
-            parts.append(f"[Source: {source['document_name']}]
-{source.get('content', '')}")
-        return "\n\n---\n\n".join(parts) if parts else "No relevant documents found."
-
-    async def _generate_answer(self, session_id: str, query: str, sources: list[dict[str, Any]]) -> str:
-        history = await self.history_service.get_history(session_id, self.max_history_turns * 2)
-        system_prompt = SYSTEM_TEMPLATE.format(context=self._build_context(sources))
-        messages = [SystemMessage(content=system_prompt)]
-        messages.extend(self.history_service.format_history_for_llm(history))
-        messages.append(HumanMessage(content=query))
-        return await llm_service.generate(messages)
+    async def _generate_answer(self, query: str, results: list[dict[str, Any]]) -> str:
+        payload = await self.answer_generator.generate(query, results)
+        return payload.get("answer", "")
 
     async def query(self, kb_id: str, session_id: str, query: str) -> dict:
         await self.history_service.add_message(session_id, "user", query)
         results = await self._retrieve(kb_id, query)
         decision = self._confidence_decision(results)
+        response_metadata = {"engine": "rag_lab", "kb_id": kb_id}
         if not decision["ok"]:
             msg_id = await self.history_service.add_message(session_id, "assistant", _INSUFFICIENT_ANSWER, [])
             return {
                 "answer": _INSUFFICIENT_ANSWER,
                 "sources": [],
                 "contexts": [],
+                "score": decision.get("top_similarity_score", 0.0),
+                "metadata": response_metadata,
                 "message_id": msg_id,
                 "confidence": "low",
                 "reason": decision["reason"],
@@ -450,12 +425,15 @@ class RagLabAdapterService:
 
         effective = self._effective_results(results)
         sources = [self._build_source(result) for result in effective]
-        answer = await self._generate_answer(session_id, query, sources)
+        answer = await self._generate_answer(query, effective)
         msg_id = await self.history_service.add_message(session_id, "assistant", answer, sources)
+        contexts = [source.get("content", "") for source in sources]
         return {
             "answer": answer,
             "sources": sources,
-            "contexts": [source.get("content", "") for source in sources],
+            "contexts": contexts,
+            "score": decision.get("top_similarity_score", 0.0),
+            "metadata": response_metadata,
             "message_id": msg_id,
             "top_similarity_score": decision.get("top_similarity_score"),
             "threshold": self.score_threshold,
@@ -465,6 +443,7 @@ class RagLabAdapterService:
         await self.history_service.add_message(session_id, "user", query)
         results = await self._retrieve(kb_id, query)
         decision = self._confidence_decision(results)
+        response_metadata = {"engine": "rag_lab", "kb_id": kb_id}
         if not decision["ok"]:
             msg_id = await self.history_service.add_message(session_id, "assistant", _INSUFFICIENT_ANSWER, [])
             yield {"type": "chunk", "text": _INSUFFICIENT_ANSWER}
@@ -472,6 +451,9 @@ class RagLabAdapterService:
             yield {
                 "type": "done",
                 "message_id": msg_id,
+                "score": decision.get("top_similarity_score", 0.0),
+                "metadata": response_metadata,
+                "contexts": [],
                 "confidence": "low",
                 "reason": decision["reason"],
             }
@@ -479,13 +461,17 @@ class RagLabAdapterService:
 
         effective = self._effective_results(results)
         sources = [self._build_source(result) for result in effective]
-        answer = await self._generate_answer(session_id, query, sources)
+        answer = await self._generate_answer(query, effective)
         msg_id = await self.history_service.add_message(session_id, "assistant", answer, sources)
+        contexts = [source.get("content", "") for source in sources]
         yield {"type": "chunk", "text": answer}
         yield {"type": "sources", "sources": sources}
         yield {
             "type": "done",
             "message_id": msg_id,
+            "score": decision.get("top_similarity_score", 0.0),
+            "metadata": response_metadata,
+            "contexts": contexts,
             "top_similarity_score": decision.get("top_similarity_score"),
             "threshold": self.score_threshold,
         }

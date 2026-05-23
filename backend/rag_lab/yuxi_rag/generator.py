@@ -38,7 +38,7 @@ def get_chat_config() -> ChatConfig:
     except Exception:
         settings = None
 
-    model = os.getenv("LLM_MODEL") or os.getenv("DEEPSEEK_MODEL_NAME")
+    model = os.getenv("CHAT_MODEL") or os.getenv("LLM_MODEL") or os.getenv("DEEPSEEK_MODEL_NAME")
     api_key = os.getenv("LLM_API_KEY") or os.getenv("DEEPSEEK_API_KEY")
     base_url = os.getenv("LLM_BASE_URL") or os.getenv("DEEPSEEK_API_BASE")
     temperature = float(os.getenv("LLM_TEMPERATURE", "0.1"))

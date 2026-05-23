@@ -48,9 +48,13 @@ class RagLabAdapterService:
         self.score_threshold = settings.SIMILARITY_SCORE_THRESHOLD
         self.min_source_count = settings.MIN_SOURCE_COUNT
         self.answer_without_source = settings.ANSWER_WITHOUT_SOURCE
-        self.enable_reranker = settings.ENABLE_RERANKER
+        env_rerank = os.getenv("RAG_USE_RERANK")
+        if env_rerank is None:
+            self.enable_reranker = settings.ENABLE_RERANKER
+        else:
+            self.enable_reranker = env_rerank.strip().lower() in {"1", "true", "yes", "y"}
         self.reranker_top_k = settings.RERANKER_TOP_K
-        self.reranker_top_n = settings.RERANKER_TOP_N
+        self.reranker_top_n = int(os.getenv("RAG_RERANK_TOP_N", settings.RERANKER_TOP_N))
         self.answer_generator = AnswerGenerator()
 
     def _copied_name(self, kb_id: str, doc_id: str, filename: str) -> str:
@@ -126,12 +130,19 @@ class RagLabAdapterService:
                 embeddings_path.unlink()
             return {"documents": 0, "paragraphs": 0, "chunks": 0, "embedding_dim": 0}
 
+        chunk_strategy = os.getenv("CHUNK_STRATEGY") or settings.CHUNK_STRATEGY or "paragraph"
+        if chunk_strategy.strip().lower() == "semantic":
+            chunk_strategy = "paragraph"
+        chunk_size = int(os.getenv("CHUNK_SIZE", settings.CHUNK_SIZE))
+        chunk_overlap = int(os.getenv("CHUNK_OVERLAP", settings.CHUNK_OVERLAP))
+
         result = await pipeline.build_index(
             docs_dir=RAG_LAB_DOCS_DIR,
             index_dir=RAG_LAB_INDEX_DIR,
             chunks_path=RAG_LAB_CHUNKS_PATH,
-            chunk_size=settings.CHUNK_SIZE,
-            chunk_overlap=settings.CHUNK_OVERLAP,
+            chunk_strategy=chunk_strategy,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
         )
         return {
             "documents": int(result.get("documents", 0)),
@@ -338,15 +349,44 @@ class RagLabAdapterService:
         store = LocalVectorStore(RAG_LAB_INDEX_DIR)
         if not store.exists():
             return []
+        retrieval_mode = os.getenv("RAG_RETRIEVAL_MODE", "hybrid").strip().lower()
+        fusion = os.getenv("RAG_HYBRID_FUSION", "rrf").strip().lower()
+        dense_weight = float(os.getenv("RAG_HYBRID_DENSE_WEIGHT", "0.7"))
+        sparse_weight = float(os.getenv("RAG_HYBRID_SPARSE_WEIGHT", "0.3"))
+
         top_k = self.reranker_top_k if self.enable_reranker else settings.TOP_K
         recall_k = max(top_k * 5, self.reranker_top_k, settings.TOP_K)
-        results = await Retriever(index_dir=RAG_LAB_INDEX_DIR).retrieve(query, top_k=recall_k)
+        retriever = Retriever(index_dir=RAG_LAB_INDEX_DIR)
+        try:
+            results = await retriever.retrieve(
+                query,
+                top_k=recall_k,
+                retrieval_mode=retrieval_mode,
+                fusion=fusion,
+                dense_weight=dense_weight,
+                sparse_weight=sparse_weight,
+            )
+        except Exception as exc:
+            logger.warning("[RagLab] retrieval fallback to vector mode: %s", exc)
+            results = await retriever.retrieve(
+                query,
+                top_k=recall_k,
+                retrieval_mode="vector",
+                fusion=fusion,
+                dense_weight=dense_weight,
+                sparse_weight=sparse_weight,
+            )
         prefix = self._source_prefix(kb_id)
         filtered = [
             result for result in results
             if str((result.get("metadata") or {}).get("source", "")).startswith(prefix)
         ]
-        filtered = await rerank_if_available(query, filtered, use_reranker=self.enable_reranker)
+        filtered = await rerank_if_available(
+            query,
+            filtered,
+            use_reranker=self.enable_reranker,
+            top_n=self.reranker_top_n,
+        )
         keep = self.reranker_top_n if self.enable_reranker else settings.TOP_K
         return filtered[:keep]
 

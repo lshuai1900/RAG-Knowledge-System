@@ -19,26 +19,11 @@ for candidate in (RAG_LAB_DIR, BACKEND_DIR, PROJECT_ROOT):
     if str(candidate) not in sys.path:
         sys.path.insert(0, str(candidate))
 
-from yuxi_rag.pipeline import ask_question  # noqa: E402
+from yuxi_rag import pipeline  # noqa: E402
 
-SUMMARY_KEYS = [
-    "hit_at_k",
-    "recall_at_k",
-    "mrr",
-    "faithfulness",
-    "answer_relevancy",
-    "context_precision",
-    "context_recall",
-    "answer_correctness",
-]
-RAGAS_METRIC_KEYS = [
-    "faithfulness",
-    "answer_relevancy",
-    "response_relevancy",
-    "context_precision",
-    "context_recall",
-    "answer_correctness",
-]
+
+BASE_METRICS = ["hit_at_k", "recall_at_k", "mrr", "keyword_hit"]
+RAGAS_METRICS = ["faithfulness", "answer_relevancy", "context_precision", "context_recall"]
 
 
 def _utc_now() -> str:
@@ -75,8 +60,7 @@ def _read_json(path: str | Path) -> Any:
 def _write_json(path: str | Path, payload: dict) -> None:
     output = Path(path)
     output.parent.mkdir(parents=True, exist_ok=True)
-    with output.open("w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
+    output.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _write_text(path: str | Path, text: str) -> None:
@@ -96,10 +80,10 @@ def _normalize_questions(raw: Any, limit: int | None) -> list[dict[str, Any]]:
         q.setdefault("id", f"q{idx:03d}")
         q.setdefault("question", "")
         q.setdefault("ground_truth", "")
-        q.setdefault("expected_sources", [])
-        if not q.get("expected_sources") and q.get("expected_source"):
-            q["expected_sources"] = [q.get("expected_source")]
         q.setdefault("expected_keywords", [])
+        q.setdefault("expected_source", "")
+        if not q.get("expected_source") and q.get("expected_sources"):
+            q["expected_source"] = q.get("expected_sources")[0] if q.get("expected_sources") else ""
         questions.append(q)
     if limit is not None and limit > 0:
         return questions[:limit]
@@ -124,26 +108,14 @@ def _source_matches_expected(source_name: str, expected_name: str) -> bool:
     return src == exp or src_base == exp_base or exp in src or exp_base in src_base or src_base in exp_base
 
 
-def _find_expected_rank(sources: list[dict[str, Any]], expected_sources: list[str]) -> int | None:
-    if not expected_sources:
+def _find_expected_rank(sources: list[dict[str, Any]], expected_source: str) -> int | None:
+    if not expected_source:
         return None
     for idx, src in enumerate(sources, start=1):
         name = _source_name(src)
-        if any(_source_matches_expected(name, expected) for expected in expected_sources):
+        if _source_matches_expected(name, expected_source):
             return idx
     return None
-
-
-def _recall_at_k(sources: list[dict[str, Any]], expected_sources: list[str]) -> float:
-    if not expected_sources:
-        return 1.0
-    if not sources:
-        return 0.0
-    hits = 0
-    for expected in expected_sources:
-        if any(_source_matches_expected(_source_name(src), expected) for src in sources):
-            hits += 1
-    return hits / len(expected_sources)
 
 
 def _keyword_hit(answer: str, contexts: list[str], expected_keywords: list[str]) -> bool:
@@ -166,11 +138,10 @@ def _extract_contexts(sources: list[dict[str, Any]]) -> list[str]:
 def _build_result(question: dict[str, Any], rag_output: dict[str, Any], top_k: int) -> dict[str, Any]:
     sources = rag_output.get("sources") or []
     contexts = rag_output.get("contexts") or _extract_contexts(sources)
-    expected_sources = question.get("expected_sources") or []
-    expected_keywords = question.get("expected_keywords") or []
-    rank = _find_expected_rank(sources[:top_k], expected_sources)
-    expected_source_hit = rank is not None if expected_sources else True
-    recall = _recall_at_k(sources[:top_k], expected_sources)
+    expected_source = question.get("expected_source") or ""
+    rank = _find_expected_rank(sources[:top_k], expected_source)
+    expected_source_hit = rank is not None if expected_source else True
+    recall = 1.0 if expected_source_hit else 0.0
     return {
         "id": question.get("id"),
         "question": question.get("question"),
@@ -178,10 +149,10 @@ def _build_result(question: dict[str, Any], rag_output: dict[str, Any], top_k: i
         "answer": rag_output.get("answer", ""),
         "sources": sources,
         "contexts": contexts,
-        "expected_sources": expected_sources,
-        "expected_keywords": expected_keywords,
+        "expected_source": expected_source,
+        "expected_keywords": question.get("expected_keywords") or [],
         "expected_source_hit": expected_source_hit,
-        "keyword_hit": _keyword_hit(rag_output.get("answer", ""), contexts, expected_keywords),
+        "keyword_hit": _keyword_hit(rag_output.get("answer", ""), contexts, question.get("expected_keywords") or []),
         "rank": rank,
         "metrics": {
             "hit_at_k": 1.0 if expected_source_hit else 0.0,
@@ -200,7 +171,7 @@ def _build_error_result(question: dict[str, Any], error: Exception) -> dict[str,
         "answer": "",
         "sources": [],
         "contexts": [],
-        "expected_sources": question.get("expected_sources") or [],
+        "expected_source": question.get("expected_source") or "",
         "expected_keywords": question.get("expected_keywords") or [],
         "expected_source_hit": False,
         "keyword_hit": False,
@@ -210,16 +181,12 @@ def _build_error_result(question: dict[str, Any], error: Exception) -> dict[str,
     }
 
 
-def _load_ragas_metrics(include_answer_correctness: bool) -> tuple[list[Any], list[str]]:
+def _load_ragas_metrics() -> tuple[list[Any], list[str]]:
     from ragas import metrics as ragas_metrics  # type: ignore
-
-    requested = ["faithfulness", "answer_relevancy", "context_precision", "context_recall"]
-    if include_answer_correctness:
-        requested.append("answer_correctness")
 
     loaded: list[Any] = []
     names: list[str] = []
-    for name in requested:
+    for name in RAGAS_METRICS:
         metric = getattr(ragas_metrics, name, None)
         if metric is None and name == "answer_relevancy":
             metric = getattr(ragas_metrics, "response_relevancy", None)
@@ -275,8 +242,7 @@ async def _run_ragas(results: list[dict[str, Any]]) -> str | None:
         return f"Ragas import failed: {type(exc).__name__}: {exc}"
 
     try:
-        include_correctness = any((r.get("ground_truth") or "").strip() for r in rows_for_ragas)
-        metrics, metric_names = _load_ragas_metrics(include_correctness)
+        metrics, metric_names = _load_ragas_metrics()
         if not metrics:
             return "No compatible Ragas metrics found in installed ragas version"
         dataset = _make_ragas_dataset(rows_for_ragas)
@@ -284,7 +250,7 @@ async def _run_ragas(results: list[dict[str, Any]]) -> str | None:
         ragas_rows = _ragas_scores_to_rows(score)
         for result, ragas_row in zip(rows_for_ragas, ragas_rows):
             metrics_dict = result.setdefault("metrics", {})
-            for key in RAGAS_METRIC_KEYS + metric_names:
+            for key in RAGAS_METRICS + metric_names:
                 if key in ragas_row:
                     normalized_key = "answer_relevancy" if key == "response_relevancy" else key
                     value = _safe_float(ragas_row.get(key))
@@ -296,11 +262,12 @@ async def _run_ragas(results: list[dict[str, Any]]) -> str | None:
 
 
 def _build_summary(results: list[dict[str, Any]]) -> dict[str, Any]:
-    summary = {key: None for key in SUMMARY_KEYS}
+    summary = {key: None for key in BASE_METRICS + RAGAS_METRICS}
     summary["hit_at_k"] = _mean([r.get("metrics", {}).get("hit_at_k") for r in results]) or 0.0
     summary["recall_at_k"] = _mean([r.get("metrics", {}).get("recall_at_k") for r in results]) or 0.0
     summary["mrr"] = _mean([r.get("metrics", {}).get("mrr") for r in results]) or 0.0
-    for key in ["faithfulness", "answer_relevancy", "context_precision", "context_recall", "answer_correctness"]:
+    summary["keyword_hit"] = _mean([1.0 if r.get("keyword_hit") else 0.0 for r in results]) or 0.0
+    for key in RAGAS_METRICS:
         summary[key] = _mean([r.get("metrics", {}).get(key) for r in results])
     return summary
 
@@ -314,31 +281,18 @@ def _truncate(text: str, limit: int = 800) -> str:
     return text if len(text or "") <= limit else text[:limit].rstrip() + "..."
 
 
-def _build_diagnostics(summary: dict[str, Any], args: argparse.Namespace, ragas_error: str | None) -> list[str]:
-    diagnostics: list[str] = []
-    if ragas_error:
-        diagnostics.append(f"Ragas 未完成：{ragas_error}。基础检索指标仍然有效。")
-    if (summary.get("hit_at_k") or 0.0) < 0.6:
-        diagnostics.append("Hit@K 低：建议调整 chunk_size、chunk_overlap、top_k 或启用 MMR/Reranker 实验。")
-    if args.retrieval_only:
-        diagnostics.append("当前为 retrieval-only 模式：不会生成答案，也不会运行 Ragas 生成类指标。")
-    elif args.skip_ragas:
-        diagnostics.append("当前设置了 --skip-ragas：只输出基础检索指标和问答结果。")
-    if not diagnostics:
-        diagnostics.append("未发现明显异常，可继续对比分块参数、MMR 和 Reranker 实验结果。")
-    return diagnostics
-
-
-def _render_md(report: dict[str, Any], args: argparse.Namespace) -> str:
+def _render_md(report: dict[str, Any]) -> str:
     summary = report.get("summary", {})
     lines = [
-        "# Yuxi-RAG 实验评估报告",
+        "# RAGAS 评估报告 (rag_lab)",
         "",
-        "## 1. 运行信息",
+        "## 1. 运行参数",
         f"- run_name: `{report.get('run_name')}`",
         f"- total_questions: {report.get('total_questions')}",
         f"- top_k: {report.get('top_k')}",
-        f"- retrieval_only: {str(report.get('retrieval_only')).lower()}",
+        f"- retrieval_mode: {report.get('retrieval_mode')}",
+        f"- chunk_strategy: {report.get('chunk_strategy')}",
+        f"- use_rerank: {str(report.get('use_rerank')).lower()}",
         f"- skip_ragas: {str(report.get('skip_ragas')).lower()}",
         f"- generated_at: {report.get('generated_at')}",
         "",
@@ -346,17 +300,19 @@ def _render_md(report: dict[str, Any], args: argparse.Namespace) -> str:
         f"- Hit@K: {_fmt_metric(summary.get('hit_at_k'))}",
         f"- Recall@K: {_fmt_metric(summary.get('recall_at_k'))}",
         f"- MRR: {_fmt_metric(summary.get('mrr'))}",
+        f"- Keyword Hit: {_fmt_metric(summary.get('keyword_hit'))}",
         f"- Faithfulness: {_fmt_metric(summary.get('faithfulness'))}",
         f"- Answer Relevancy: {_fmt_metric(summary.get('answer_relevancy'))}",
         f"- Context Precision: {_fmt_metric(summary.get('context_precision'))}",
         f"- Context Recall: {_fmt_metric(summary.get('context_recall'))}",
-        f"- Answer Correctness: {_fmt_metric(summary.get('answer_correctness'))}",
         "",
         "## 3. 每个问题结果",
         "",
     ]
+    failed = []
     for result in report.get("results", []):
-        metrics = result.get("metrics", {})
+        if result.get("error"):
+            failed.append(result.get("id"))
         source_names = [_source_name(src) for src in result.get("sources", [])]
         source_text = ", ".join(f"`{name}`" for name in source_names if name) or "无"
         lines.extend([
@@ -365,51 +321,55 @@ def _render_md(report: dict[str, Any], args: argparse.Namespace) -> str:
             f"- question: {result.get('question')}",
             f"- ground_truth: {_truncate(result.get('ground_truth') or '', 500)}",
             f"- answer: {_truncate(result.get('answer') or '', 800)}",
+            f"- contexts: {len(result.get('contexts') or [])}",
             f"- sources: {source_text}",
+            f"- expected_source: {result.get('expected_source') or '无'}",
             f"- expected_source_hit: {result.get('expected_source_hit')}",
             f"- keyword_hit: {result.get('keyword_hit')}",
             f"- rank: {result.get('rank')}",
-            f"- metrics:",
-            f"  - hit_at_k: {_fmt_metric(metrics.get('hit_at_k'))}",
-            f"  - recall_at_k: {_fmt_metric(metrics.get('recall_at_k'))}",
-            f"  - mrr: {_fmt_metric(metrics.get('mrr'))}",
-            f"  - faithfulness: {_fmt_metric(metrics.get('faithfulness'))}",
-            f"  - answer_relevancy: {_fmt_metric(metrics.get('answer_relevancy'))}",
-            f"  - context_precision: {_fmt_metric(metrics.get('context_precision'))}",
-            f"  - context_recall: {_fmt_metric(metrics.get('context_recall'))}",
-            f"  - answer_correctness: {_fmt_metric(metrics.get('answer_correctness'))}",
             f"- error: {result.get('error')}",
             "",
         ])
-    lines.extend(["## 4. 自动诊断", ""])
-    for item in report.get("diagnostics", []):
-        lines.append(f"- {item}")
-    lines.append("")
+    lines.extend(["## 4. 失败问题列表", ""])
+    if failed:
+        lines.extend([f"- {item}" for item in failed])
+    else:
+        lines.append("- 无")
+    lines.extend([
+        "",
+        "## 5. 迁移建议",
+        "",
+        "- 对比 chunk_strategy=paragraph/recursive/sentence_window/markdown_header 的命中率与 Keyword Hit，优先保留指标稳定的策略。",
+        "- 如果 hybrid 下 sources 缺失，先调高 dense_weight 或回退到 vector 进行对照。",
+        "- rerank 仅在高召回场景下开启，观察 MRR 与 Answer Relevancy 是否提升。",
+        "",
+    ])
     return "\n".join(lines)
 
 
 async def _run(args: argparse.Namespace) -> dict[str, Any]:
     questions = _normalize_questions(_read_json(args.questions), args.limit)
-    run_name = args.run_name or f"yuxi_rag_eval_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+    run_name = f"ragas_eval_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+
+    build_result = await pipeline.build_index(chunk_strategy=args.chunk_strategy)
+
     results: list[dict[str, Any]] = []
     for question in questions:
         try:
             if not question.get("question"):
                 raise ValueError("question is empty")
-            rag_output = await ask_question(
+            rag_output = await pipeline.ask_question(
                 question["question"],
                 top_k=args.top_k,
-                use_mmr=args.use_mmr,
-                lambda_mult=args.lambda_mult,
-                use_reranker=args.use_reranker,
-                retrieval_only=args.retrieval_only,
+                retrieval_mode=args.retrieval_mode,
+                use_reranker=args.use_rerank,
             )
             results.append(_build_result(question, rag_output, args.top_k))
         except Exception as exc:
             results.append(_build_error_result(question, exc))
 
     ragas_error = None
-    if not args.retrieval_only and not args.skip_ragas:
+    if not args.skip_ragas:
         ragas_error = await _run_ragas(results)
 
     summary = _build_summary(results)
@@ -418,34 +378,31 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
         "generated_at": _utc_now(),
         "total_questions": len(results),
         "top_k": args.top_k,
-        "retrieval_only": args.retrieval_only,
+        "retrieval_mode": args.retrieval_mode,
+        "chunk_strategy": args.chunk_strategy,
+        "use_rerank": args.use_rerank,
         "skip_ragas": args.skip_ragas,
-        "use_mmr": args.use_mmr,
-        "lambda_mult": args.lambda_mult,
-        "use_reranker": args.use_reranker,
         "ragas_error": ragas_error,
+        "build_index": build_result,
         "summary": summary,
         "results": results,
-        "diagnostics": _build_diagnostics(summary, args, ragas_error),
     }
     _write_json(args.output_json, report)
-    _write_text(args.output_md, _render_md(report, args))
+    _write_text(args.output_md, _render_md(report))
     return report
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run offline evaluation for the Yuxi-RAG experiment module.")
+    parser = argparse.ArgumentParser(description="Run ragas evaluation for rag_lab.")
     parser.add_argument("--questions", default="backend/rag_lab/eval/eval_questions.json", help="Path to eval_questions.json")
-    parser.add_argument("--output-json", default="backend/rag_lab/eval/eval_report.json", help="Path to output JSON report")
-    parser.add_argument("--output-md", default="backend/rag_lab/eval/eval_report.md", help="Path to output Markdown report")
-    parser.add_argument("--limit", type=int, default=None, help="Limit number of questions")
+    parser.add_argument("--output-json", default="backend/rag_lab/eval/ragas_report.json", help="Path to output JSON report")
+    parser.add_argument("--output-md", default="backend/rag_lab/eval/ragas_report.md", help="Path to output Markdown report")
     parser.add_argument("--top-k", type=int, default=5, help="Top-K used for retrieval metrics")
-    parser.add_argument("--retrieval-only", action="store_true", help="Only run retrieval metrics, do not call LLM or Ragas")
-    parser.add_argument("--skip-ragas", action="store_true", help="Run RAG but skip Ragas metrics")
-    parser.add_argument("--run-name", default=None, help="Custom run name for the report")
-    parser.add_argument("--use-mmr", action="store_true", help="Use MMR retrieval in the experiment pipeline")
-    parser.add_argument("--lambda-mult", type=float, default=0.5, help="MMR relevance/diversity balance")
-    parser.add_argument("--use-reranker", action="store_true", help="Try current project reranker if enabled; otherwise no-op")
+    parser.add_argument("--retrieval-mode", default="hybrid", help="vector|keyword|hybrid")
+    parser.add_argument("--chunk-strategy", default="paragraph", help="paragraph|recursive|sentence_window|markdown_header")
+    parser.add_argument("--use-rerank", action="store_true", help="Enable rerank in evaluation")
+    parser.add_argument("--skip-ragas", action="store_true", help="Skip ragas metrics even if installed")
+    parser.add_argument("--limit", type=int, default=None, help="Limit number of questions")
     return parser.parse_args(argv)
 
 
@@ -453,7 +410,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
     report = asyncio.run(_run(args))
     print(
-        "Yuxi-RAG evaluation finished: "
+        "Ragas evaluation finished: "
         f"questions={report['total_questions']} "
         f"hit_at_k={_fmt_metric(report['summary'].get('hit_at_k'))} "
         f"json={args.output_json} md={args.output_md}"

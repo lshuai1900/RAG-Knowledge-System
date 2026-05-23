@@ -3,14 +3,14 @@
     "id": "q001",
     "question": "RAG 是什么？",
     "ground_truth": "RAG 是检索增强生成，会先从外部知识库检索相关文档片段，再把这些上下文交给大模型生成答案。",
-    "expected_sources": ["01_RAG_intro.md"],
+    "expected_source": "01_RAG_intro.md",
     "expected_keywords": ["检索增强生成", "知识库", "上下文"]
   },
   {
     "id": "q002",
     "question": "为什么 RAG 需要优化分块策略？",
     "ground_truth": "分块策略影响检索质量，过短会切碎信息，过长会引入无关内容，段落优先分块能更好保留语义边界。",
-    "expected_sources": ["01_RAG_intro.md"],
+    "expected_source": "01_RAG_intro.md",
     "expected_keywords": ["分块", "检索质量", "语义边界"]
   }
 ]

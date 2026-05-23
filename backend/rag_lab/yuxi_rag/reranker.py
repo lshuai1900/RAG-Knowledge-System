@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -9,17 +10,44 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 
-async def rerank_if_available(query: str, results: list[dict[str, Any]], use_reranker: bool = False) -> list[dict[str, Any]]:
-    if not use_reranker or not results:
+def _env_flag(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "y"}
+
+
+def _annotate_results(results: list[dict[str, Any]], enabled: bool) -> list[dict[str, Any]]:
+    for result in results:
+        metadata = dict(result.get("metadata") or {})
+        metadata["rerank_enabled"] = enabled
+        metadata["original_score"] = result.get("score")
+        if "rerank_score" in result:
+            metadata["rerank_score"] = result.get("rerank_score")
+        result["metadata"] = metadata
+    return results
+
+
+async def rerank_if_available(
+    query: str,
+    results: list[dict[str, Any]],
+    use_reranker: bool = False,
+    top_n: int | None = None,
+) -> list[dict[str, Any]]:
+    if not results:
         return results
+
+    effective_enabled = _env_flag("RAG_USE_RERANK", use_reranker)
+    if not effective_enabled:
+        return _annotate_results(results, enabled=False)
 
     try:
         from app.services.reranker_service import reranker_service
     except Exception:
-        return results
+        return _annotate_results(results, enabled=False)
 
     if not getattr(reranker_service, "enabled", False):
-        return results
+        return _annotate_results(results, enabled=False)
 
     sources = []
     for result in results:
@@ -36,7 +64,7 @@ async def rerank_if_available(query: str, results: list[dict[str, Any]], use_rer
     try:
         ranked = await reranker_service.rerank(query, sources)
     except Exception:
-        return results
+        return _annotate_results(results, enabled=False)
 
     by_key = {
         (item.get("document_name") or item.get("source"), item.get("chunk_index")): item
@@ -60,4 +88,6 @@ async def rerank_if_available(query: str, results: list[dict[str, Any]], use_rer
         key = (metadata.get("source"), metadata.get("chunk_index"))
         if key not in used:
             reordered.append(result)
-    return reordered
+    if top_n is not None and top_n > 0:
+        reordered = reordered[:top_n]
+    return _annotate_results(reordered, enabled=True)

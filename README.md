@@ -1,58 +1,57 @@
 # RAG Knowledge System
 
-RAG Knowledge System is an open-source knowledge-base question answering system built around Retrieval-Augmented Generation (RAG). It supports document upload and parsing, multiple chunking strategies, OpenAI-compatible embeddings, local vector indexing, Hybrid Search, optional reranking, LLM answers with citations, Ragas/basic evaluation scripts, frontend RAG status visualization, and a legacy fallback path.
+RAG Knowledge System 是一个面向知识库问答的开源 RAG（Retrieval-Augmented Generation，检索增强生成）系统。项目集成了文档上传与解析、多策略分块、OpenAI-compatible Embedding、本地向量索引、Hybrid Search、可选 Rerank、LLM 问答、Ragas / 基础自动评估、前端 RAG 状态可视化，以及 legacy 回滚机制。
 
-## Features
+## 功能特性
 
-- Knowledge base and document management from a React frontend.
-- Document upload, parsing, chunking, indexing, and rebuild operations.
-- Chunk strategies: `semantic`, `paragraph`, `recursive`, `sentence_window`, `markdown_header`.
-- Retrieval modes: `vector`, `keyword`, `hybrid`.
-- Fusion strategies: `rrf`, `weighted_score`.
-- Optional rerank stage with configurable Top N.
-- Local numpy vector index for the enhanced `rag_lab` engine.
-- Legacy fallback flow for the original backend RAG path.
-- Evaluation scripts for Hit@K, Recall@K, MRR, keyword hit, and optional Ragas metrics.
-- Frontend RAG status panel for current engine/config visibility.
-- Source citation cards with score, dense score, sparse score, fusion score, rerank score, and chunk strategy.
+- 知识库管理、文档上传、文档解析、索引重建。
+- 分块策略：`semantic`、`paragraph`、`recursive`、`sentence_window`、`markdown_header`。
+- 检索模式：`vector`、`keyword`、`hybrid`。
+- 融合方式：`rrf`、`weighted_score`。
+- 可选 Rerank，并支持配置 `RAG_RERANK_TOP_N`。
+- `rag_lab` 增强 RAG 引擎：本地 numpy 向量索引、混合检索、可选重排。
+- `legacy` 原始流程回滚机制，便于保留旧版后端 RAG 路径。
+- 自动评估脚本：Hit@K、Recall@K、MRR、keyword_hit，以及可选 Ragas 指标。
+- 前端 RAG 引擎状态面板，可展示当前配置和 RAG 流程。
+- 问答 sources 卡片展示：`score`、`dense_score`、`sparse_score`、`fusion_score`、`rerank_score`、`chunk_strategy`。
 
-## Tech Stack
+## 技术栈
 
-- Backend: FastAPI / Python
-- Frontend: React / Vite / TypeScript
-- Vector index: local numpy index
-- RAG evaluation: optional Ragas
-- LLM / Embedding: OpenAI-compatible API
-- Optional legacy vector store: Milvus Lite / Milvus-compatible path
+- Backend：FastAPI / Python
+- Frontend：React / Vite / TypeScript
+- Vector index：local numpy index
+- RAG eval：optional Ragas
+- LLM / Embedding：OpenAI-compatible API
+- Legacy vector path：Milvus Lite / Milvus-compatible path
 
-## Project Structure
+## 项目结构
 
 ```text
 .
 ├── backend/
-│   ├── app/                         # FastAPI app, APIs, services, models, DB adapters
-│   ├── rag_lab/                     # Enhanced RAG lab engine and evaluation tools
-│   │   ├── yuxi_rag/                # Loader, chunker, retriever, hybrid search, reranker, generator
-│   │   ├── eval/                    # Smoke, parameter experiments, Ragas/basic eval scripts
-│   │   └── data/                    # Runtime docs/chunks/index; generated files are ignored
-│   └── requirements.txt             # Main backend dependencies
+│   ├── app/                         # FastAPI 主应用、API、服务层、模型、数据库适配
+│   ├── rag_lab/                     # 增强 RAG 实验引擎与评估脚本
+│   │   ├── yuxi_rag/                # loader / chunker / retriever / hybrid search / reranker / generator
+│   │   ├── eval/                    # smoke、参数实验、Ragas / 基础评估脚本
+│   │   └── data/                    # 运行时 docs/chunks/index；生成物默认忽略
+│   └── requirements.txt             # 主后端依赖
 ├── frontend/
-│   └── src/                         # React app, components, API clients, hooks, store, types
-├── docker-compose.yml               # Optional local orchestration
-├── .env.example                     # Safe placeholder environment file
+│   └── src/                         # React 前端源码、组件、API、hooks、store、types
+├── docker-compose.yml               # 可选本地编排文件
+├── .env.example                     # 脱敏环境变量示例
 └── README.md
 ```
 
-## Quick Start
+## 快速开始
 
-### 1. Clone
+### 1. 克隆仓库
 
 ```bash
 git clone <your-repo-url>
 cd RAG-Knowledge-System
 ```
 
-### 2. Create a Python virtual environment
+### 2. 创建 Python 虚拟环境
 
 ```bash
 python3 -m venv .venv
@@ -60,60 +59,60 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 ```
 
-### 3. Install backend dependencies
+### 3. 安装后端依赖
 
 ```bash
 pip install -r backend/requirements.txt
 ```
 
-### 4. Install optional rag_lab evaluation dependencies
+### 4. 安装 rag_lab / 评估可选依赖
 
-Install these when you want to run `backend/rag_lab` experiments or optional Ragas evaluation:
+如果需要运行 `backend/rag_lab` 实验、参数评估或 Ragas 评估，再安装：
 
 ```bash
 pip install -r backend/rag_lab/requirements-rag-lab.txt
 ```
 
-### 5. Install frontend dependencies
+### 5. 安装前端依赖
 
 ```bash
 npm --prefix frontend install
 ```
 
-### 6. Configure environment variables
+### 6. 配置环境变量
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` and fill in your own OpenAI-compatible chat and embedding credentials. Do not commit `.env`.
+编辑 `.env`，填入你自己的 OpenAI-compatible Chat / Embedding 服务配置。不要提交 `.env`。
 
-### 7. Start the backend
+### 7. 启动后端
 
 ```bash
 PYTHONPATH=backend RAG_ENGINE=rag_lab DEBUG=false \
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Backend API:
+后端地址：
 
-- API root: `http://localhost:8000`
-- Swagger UI: `http://localhost:8000/docs`
-- RAG status: `http://localhost:8000/api/v1/rag/status`
+- API 根地址：`http://localhost:8000`
+- Swagger 文档：`http://localhost:8000/docs`
+- RAG 状态接口：`http://localhost:8000/api/v1/rag/status`
 
-### 8. Start the frontend
+### 8. 启动前端
 
 ```bash
 npm --prefix frontend run dev -- --host 0.0.0.0 --port 5173
 ```
 
-Frontend UI:
+前端页面：
 
 - `http://localhost:5173`
 
-## Environment Variables
+## 环境变量说明
 
-Common defaults for the enhanced RAG flow:
+增强 RAG 流程的常用配置：
 
 ```env
 RAG_ENGINE=rag_lab
@@ -134,29 +133,36 @@ EMBEDDING_API_KEY=
 EMBEDDING_API_BASE=https://api.example.com/v1
 ```
 
-Additional backend variables such as `DATABASE_URL`, `UPLOAD_DIR`, `SIMILARITY_SCORE_THRESHOLD`, `TOP_K`, and legacy Milvus/BM25 settings are documented in `.env.example`.
+更多后端变量请参考 [.env.example](.env.example)，包括：
 
-## RAG Modes
+- `DATABASE_URL`
+- `UPLOAD_DIR`
+- `SIMILARITY_SCORE_THRESHOLD`
+- `TOP_K`
+- legacy Milvus / BM25 配置
+- Reranker 配置
+
+## RAG 模式说明
 
 ### `RAG_ENGINE=rag_lab`
 
-The enhanced RAG engine. It uses the `backend/rag_lab/yuxi_rag/` modules for document loading, chunking, local vector indexing, vector/keyword/hybrid retrieval, optional rerank, and answer generation.
+增强 RAG 引擎。该模式使用 [backend/rag_lab/yuxi_rag/](backend/rag_lab/yuxi_rag/) 中的模块完成文档加载、分块、本地向量索引、向量 / 关键词 / 混合检索、可选 rerank 和答案生成。
 
-Useful knobs:
+常用参数：
 
-- `CHUNK_STRATEGY`: `semantic`, `paragraph`, `recursive`, `sentence_window`, `markdown_header`
-- `RAG_RETRIEVAL_MODE`: `vector`, `keyword`, `hybrid`
-- `RAG_HYBRID_FUSION`: `rrf`, `weighted_score`
-- `RAG_USE_RERANK`: `true` or `false`
-- `RAG_RERANK_TOP_N`: number of chunks kept after rerank
+- `CHUNK_STRATEGY`：`semantic`、`paragraph`、`recursive`、`sentence_window`、`markdown_header`
+- `RAG_RETRIEVAL_MODE`：`vector`、`keyword`、`hybrid`
+- `RAG_HYBRID_FUSION`：`rrf`、`weighted_score`
+- `RAG_USE_RERANK`：`true` / `false`
+- `RAG_RERANK_TOP_N`：rerank 后保留的 chunk 数量
 
 ### `RAG_ENGINE=legacy`
 
-The original backend RAG flow. Keep this path available as a rollback mechanism for deployments that still depend on the previous Milvus/BM25 service flow.
+原始后端 RAG 流程。该模式保留旧版 Milvus / BM25 服务路径，可作为线上回滚机制或兼容旧部署使用。
 
-## Evaluation Scripts
+## 评估脚本说明
 
-Run from the repository root after installing dependencies and configuring `.env`:
+在仓库根目录执行，运行前请安装依赖并配置 `.env`：
 
 ```bash
 python backend/rag_lab/eval/smoke_test_main_rag.py
@@ -164,47 +170,54 @@ python backend/rag_lab/eval/run_param_experiments.py
 python backend/rag_lab/eval/run_ragas_eval.py --skip-ragas
 ```
 
-The evaluation scripts support basic retrieval metrics such as Hit@K, Recall@K, MRR, and keyword hit. Ragas metrics are optional and live in `backend/rag_lab/requirements-rag-lab.txt` so they do not have to be installed for the main backend path.
+评估脚本支持基础检索指标：
 
-Generated reports are ignored by git:
+- Hit@K
+- Recall@K
+- MRR
+- keyword_hit
+
+Ragas 是可选评估能力，相关依赖放在 [backend/rag_lab/requirements-rag-lab.txt](backend/rag_lab/requirements-rag-lab.txt)，不强制主后端流程安装。
+
+生成的评估报告默认被 git 忽略：
 
 - `backend/rag_lab/eval/*report*.json`
 - `backend/rag_lab/eval/*report*.md`
 
-## Frontend RAG Visualization
+## 前端展示说明
 
-The frontend includes a RAG engine status panel in the document/knowledge-base area. It shows:
+前端在知识库 / 文档区域提供 RAG 引擎状态面板，用于展示：
 
-- Current engine: `rag_lab` or `legacy`
-- Chunk strategy
-- Retrieval mode
-- Fusion method
-- Rerank enabled/disabled
+- 当前引擎：`rag_lab` / `legacy`
+- 分块策略
+- 检索模式
+- 融合方式
+- Rerank 开关
 - Rerank Top N
-- A visual pipeline: document upload → chunking → embedding → hybrid search → rerank → LLM answer
+- 流程展示：文档上传 → 分块 → Embedding → Hybrid Search → Rerank → LLM 回答
 
-Answer sources are shown as cards with:
+问答结果中的 sources 使用卡片展示：
 
-- Source filename
-- Chunk strategy tag
-- Total score
-- Context summary
-- Collapsible advanced scores: `dense_score`, `sparse_score`, `fusion_score`, `rerank_score`
+- source 文件名
+- chunk strategy 标签
+- 总分 `score`
+- 上下文摘要
+- 可折叠高级分数：`dense_score`、`sparse_score`、`fusion_score`、`rerank_score`
 
-## Open Source Hygiene
+## 开源注意事项
 
-Do not commit local runtime or sensitive files:
+不要提交本地运行文件或敏感信息：
 
-- `.env` or any file containing API keys
-- `.venv/`, `venv/`
+- `.env` 或任何包含 API Key 的文件
+- `.venv/`、`venv/`
 - `node_modules/`
-- frontend `dist/` or `build/`
-- uploaded documents
-- generated vector indexes and chunk files
-- generated evaluation reports
-- local caches such as `__pycache__/`, `.pytest_cache/`, `.mypy_cache/`, `.ruff_cache/`
+- 前端 `dist/`、`build/`
+- 真实上传文档
+- 生成的向量索引和 chunks
+- 生成的评估报告
+- 本地缓存：`__pycache__/`、`.pytest_cache/`、`.mypy_cache/`、`.ruff_cache/`
 
-The repository keeps only source code, example configuration, sample documents, and reproducible scripts.
+仓库应只保留源码、脱敏配置示例、示例文档和可复现脚本。
 
 ## License
 

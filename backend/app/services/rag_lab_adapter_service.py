@@ -420,6 +420,7 @@ class RagLabAdapterService:
         content = result.get("chunk_text", "") or ""
         metadata.update({"kb_id": kb_id, "doc_id": doc_id, "source": source})
         src = {
+            "source": source,
             "document_name": self._display_name(source, kb_id, doc_id),
             "chunk_index": metadata.get("chunk_index", 0),
             "section_title": "",
@@ -428,6 +429,10 @@ class RagLabAdapterService:
             "score": score,
             "raw_score": round(1.0 - score, 6),
             "similarity_score": score,
+            "dense_score": result.get("dense_score"),
+            "sparse_score": result.get("sparse_score"),
+            "fusion_score": result.get("fusion_score"),
+            "chunk_strategy": metadata.get("chunk_strategy"),
             "content": content[:500],
             "content_preview": content[:200],
             "chunk_id": result.get("chunk_id"),

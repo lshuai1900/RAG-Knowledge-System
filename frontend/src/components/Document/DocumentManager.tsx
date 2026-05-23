@@ -3,6 +3,7 @@ import { RefreshCw, Loader2, X, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { DocumentUploader } from './DocumentUploader';
 import { DocumentList } from './DocumentList';
 import { IndexStatusPanel } from './IndexStatusPanel';
+import { RagEngineStatusPanel } from './RagEngineStatusPanel';
 import { ConfirmModal } from '../shared/ConfirmModal';
 import { toast } from '../shared/toast';
 import { rebuildIndex } from '../../api/knowledgeBase';
@@ -72,6 +73,7 @@ export function DocumentManager() {
       </div>
 
       <IndexStatusPanel />
+      <RagEngineStatusPanel />
 
       <DocumentUploader />
       <DocumentList />

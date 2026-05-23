@@ -21,8 +21,9 @@ backend/rag_lab/
 ├── eval/
 │   ├── eval_questions.json
 │   ├── run_yuxi_rag_eval.py
-│   ├── eval_report.json
-│   └── eval_report.md
+│   ├── run_param_experiments.py
+│   ├── run_ragas_eval.py
+│   └── smoke_test_main_rag.py
 └── data/
     ├── docs/
     ├── index/
@@ -36,21 +37,21 @@ Embedding 和 LLM 都使用 OpenAI-compatible API。
 优先读取：
 
 ```env
-EMBED_MODEL=text-embedding-v4
-LLM_API_KEY=your-api-key
-LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-LLM_MODEL=deepseek-chat
+EMBED_MODEL=your-embedding-model
+LLM_API_KEY=
+LLM_BASE_URL=https://api.example.com/v1
+LLM_MODEL=your-chat-model
 ```
 
 如果没有配置上述变量，会尝试复用当前项目 `.env` 中已有的：
 
 ```env
-EMBEDDING_MODEL_NAME=text-embedding-v4
-EMBEDDING_API_KEY=...
-EMBEDDING_API_BASE=https://dashscope.aliyuncs.com/compatible-mode/v1
-DEEPSEEK_API_KEY=...
-DEEPSEEK_API_BASE=https://api.deepseek.com/v1
-DEEPSEEK_MODEL_NAME=deepseek-chat
+EMBEDDING_MODEL_NAME=your-embedding-model
+EMBEDDING_API_KEY=
+EMBEDDING_API_BASE=https://api.example.com/v1
+DEEPSEEK_API_KEY=
+DEEPSEEK_API_BASE=https://api.example.com/v1
+DEEPSEEK_MODEL_NAME=your-chat-model
 ```
 
 脚本不会写死或打印 API Key。

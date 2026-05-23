@@ -1,9 +1,9 @@
-eval/ragas_report.json
-eval/ragas_report.md
-eval/param_experiment_report.json
-eval/param_experiment_report.md
-data/chunks/*.json
-data/index/*.npy
-data/index/*.json
+eval/*report*.json
+eval/*report*.md
+data/chunks/*
+data/index/*
+data/docs/*
+!data/docs/
+!data/docs/01_RAG_intro.md
 __pycache__/
 *.pyc

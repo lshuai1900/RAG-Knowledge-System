@@ -117,6 +117,7 @@ class BM25Service:
                 "section_title": chunk.get("section_title", ""),
                 "section_path": chunk.get("section_path", ""),
                 "page": chunk.get("page"),
+                "chunk_strategy": chunk.get("chunk_strategy", ""),
                 "content": content,
                 "content_preview": content[:200],
             })
@@ -201,6 +202,7 @@ class BM25Service:
                 "section_title": chunk.get("section_title", ""),
                 "section_path": chunk.get("section_path", ""),
                 "page": chunk.get("page"),
+                "chunk_strategy": chunk.get("chunk_strategy", ""),
                 "score": round(raw_score, 4),
                 "raw_score": 0.0,
                 "similarity_score": round(bm25_norm, 4),

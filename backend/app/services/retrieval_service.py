@@ -1,3 +1,5 @@
+import os
+
 from app.db.milvus_client import milvus_client
 from app.services.embedding_service import embedding_service
 from app.config import settings
@@ -13,13 +15,13 @@ class RetrievalService:
         query_vector = await embedding_service.embed_query(query)
         hits = await milvus_client.search(kb_id, query_vector, k)
 
-        # Attach similarity_score derived from COSINE distance.
-        # Milvus COSINE distance = 1 - cosine_similarity, so smaller = more relevant.
+        chunk_strategy = os.getenv("CHUNK_STRATEGY") or settings.CHUNK_STRATEGY
         for h in hits:
             raw = h.get("score", 1.0)
             h["raw_score"] = raw
             h["similarity_score"] = round(1.0 - raw, 4)
+            h["dense_score"] = round(1.0 - raw, 4)
+            h["retrieval_mode"] = "vector"
+            h["chunk_strategy"] = h.get("chunk_strategy") or chunk_strategy
 
-        # Return all hits; threshold filtering is done in RAGService._check_confidence
-        # so we can report precise rejection reasons.
         return hits

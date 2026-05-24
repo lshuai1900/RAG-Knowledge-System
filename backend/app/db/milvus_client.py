@@ -68,7 +68,8 @@ class MilvusClientWrapper:
                             document_name: str, chunk_indices: list[int], doc_id: str = "",
                             section_titles: list[str] | None = None,
                             section_paths: list[str] | None = None,
-                            pages: list[int | None] | None = None) -> list[int]:
+                            pages: list[int | None] | None = None,
+                            chunk_strategies: list[str] | None = None) -> list[int]:
         client = await self.connect()
         name = self._collection_name(kb_id)
         data = []
@@ -86,6 +87,8 @@ class MilvusClientWrapper:
                 record["section_path"] = section_paths[i] or ""
             if pages and i < len(pages) and pages[i] is not None:
                 record["page"] = pages[i]
+            if chunk_strategies and i < len(chunk_strategies):
+                record["chunk_strategy"] = chunk_strategies[i] or ""
             data.append(record)
 
         def _insert():
@@ -106,7 +109,7 @@ class MilvusClientWrapper:
             return client.search(
                 collection_name=name, data=[query_vector], limit=top_k,
                 output_fields=[
-                    "text", "document_name", "chunk_index",
+                    "text", "document_name", "chunk_index", "chunk_strategy",
                     "section_title", "section_path", "page", "doc_id",
                 ],
             )
@@ -123,6 +126,8 @@ class MilvusClientWrapper:
                 "section_title": entity.get("section_title", ""),
                 "section_path": entity.get("section_path", ""),
                 "page": entity.get("page"),
+                "doc_id": entity.get("doc_id", ""),
+                "chunk_strategy": entity.get("chunk_strategy", ""),
                 "score": float(hit.get("distance", 0)),
             })
         return hits
@@ -142,7 +147,7 @@ class MilvusClientWrapper:
         all_entities = []
         offset = 0
         output_fields = [
-            "text", "document_name", "chunk_index",
+            "text", "document_name", "chunk_index", "chunk_strategy",
             "section_title", "section_path", "page", "doc_id",
         ]
 
@@ -170,6 +175,7 @@ class MilvusClientWrapper:
                     "section_path": entity.get("section_path", ""),
                     "page": entity.get("page"),
                     "doc_id": entity.get("doc_id", ""),
+                    "chunk_strategy": entity.get("chunk_strategy", ""),
                 })
             if len(page) < batch_size:
                 break

@@ -64,6 +64,12 @@ skills-lock.json
 *.swp
 *.swo
 
+# RAG runtime data (new module)
+backend/rag/data/
+
+# UI review screenshots (temporary)
+frontend-ui-review/
+
 # Archives
 *.tgz
 *.tar.gz

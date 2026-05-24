@@ -2,6 +2,8 @@
 
 面向中文论文/文档问答的本地 RAG 知识库系统。支持文档上传、多策略分块、向量/关键词/混合检索、可选 Rerank、LLM 问答与引用溯源，提供专业级 AI 控制台前端。
 
+> **架构参考**: 本项目 RAG 知识库模块设计参考了 [Yuxi](https://github.com/xerrors/Yuxi) 项目的 KnowledgeBase / Manager / Factory / ParserRegistry / ChunkingDispatcher 架构。部分代码结构受到 Yuxi 的 ragflow_like 分块策略启发。Yuxi 使用 MIT License。
+
 ## 功能特性
 
 **知识库与文档管理**

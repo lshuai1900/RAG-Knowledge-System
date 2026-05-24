@@ -98,14 +98,41 @@ export function RagEngineStatusPanel() {
 
   const configItems = useMemo(() => {
     if (!data) return [];
-    return [
-      { label: '当前引擎', value: data.RAG_ENGINE },
-      { label: '分块策略', value: data.CHUNK_STRATEGY },
-      { label: '检索模式', value: data.RAG_RETRIEVAL_MODE },
-      { label: '融合方式', value: data.RAG_HYBRID_FUSION },
-      { label: 'Rerank', value: data.RAG_USE_RERANK },
-      { label: 'Rerank Top N', value: data.RAG_RERANK_TOP_N },
+    const items = [
+      { label: '当前引擎', value: data.RAG_ENGINE ?? data.rag_engine },
+      { label: '分块策略', value: data.CHUNK_STRATEGY ?? data.chunk_strategy },
+      { label: '检索模式', value: data.RAG_RETRIEVAL_MODE ?? data.retrieval_mode },
+      { label: '融合方式', value: data.RAG_HYBRID_FUSION ?? data.hybrid_fusion },
+      { label: 'Rerank', value: data.RAG_USE_RERANK ?? data.use_rerank },
+      { label: 'Rerank Top N', value: data.RAG_RERANK_TOP_N ?? data.rerank_top_n },
     ];
+    // Add new structured fields when available
+    if (data.chunk_size != null) {
+      items.push({ label: '分块大小', value: data.chunk_size });
+      items.push({ label: '分块重叠', value: data.chunk_overlap });
+    }
+    if (data.embedding_model) {
+      items.push({ label: 'Embedding', value: data.embedding_model });
+    }
+    if (data.llm_model) {
+      items.push({ label: 'LLM 模型', value: data.llm_model });
+    }
+    return items;
+  }, [data]);
+
+  const runtimeStats = useMemo(() => {
+    if (!data) return [];
+    const stats = [];
+    if (data.chunks_count != null) {
+      stats.push({ label: '向量块数', value: data.chunks_count });
+    }
+    if (data.index_ready != null) {
+      stats.push({ label: '索引就绪', value: data.index_ready });
+    }
+    if (data.last_index_time) {
+      stats.push({ label: '上次索引', value: data.last_index_time.slice(0, 16).replace('T', ' ') });
+    }
+    return stats;
   }, [data]);
 
   return (
@@ -143,6 +170,19 @@ export function RagEngineStatusPanel() {
               </div>
             ))}
           </div>
+
+          {runtimeStats.length > 0 && (
+            <div className="grid grid-cols-3 gap-2">
+              {runtimeStats.map((s) => (
+                <div key={s.label} className="rounded-xl border border-surface-200 bg-surface-50 p-2.5 text-center">
+                  <div className="text-[10px] text-text-tertiary mb-0.5">{s.label}</div>
+                  <div className="text-xs font-semibold text-text-primary">
+                    {typeof s.value === 'boolean' ? (s.value ? '✓' : '✗') : String(s.value)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="rounded-xl border border-surface-200 bg-gradient-to-r from-surface-50 to-brand-50/20 p-3.5">
             <div className="mb-2.5 text-[10px] font-semibold text-text-tertiary uppercase tracking-wide">RAG 流水线</div>

@@ -154,6 +154,12 @@ class LegacyRAGService:
             "similarity_score": hit.get("similarity_score", 0.0),
             "content": (hit.get("content", "") or "")[:300],
             "content_preview": (hit.get("content", "") or "")[:200],
+            # Normalised score fields for frontend source cards
+            "dense_score": hit.get("vector_score", hit.get("dense_score")),
+            "sparse_score": hit.get("bm25_score_norm", hit.get("bm25_score", hit.get("sparse_score"))),
+            "fusion_score": hit.get("effective_score", hit.get("hybrid_score", hit.get("fusion_score"))),
+            "chunk_strategy": hit.get("chunk_strategy"),
+            "retrieval_mode": hit.get("retrieval_mode"),
         }
         if "rerank_score" in hit:
             src["rerank_score"] = hit["rerank_score"]

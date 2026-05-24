@@ -42,6 +42,7 @@ class IngestionService:
             section_titles = [chunk.metadata.get("section_title", "") for chunk in chunks]
             section_paths = [chunk.metadata.get("section_path", "") for chunk in chunks]
             pages = [chunk.metadata.get("page") for chunk in chunks]
+            chunk_strategies = [chunk.metadata.get("chunk_strategy", "recursive") for chunk in chunks]
 
             embeddings = await embedding_service.embed_documents(texts)
 
@@ -55,6 +56,7 @@ class IngestionService:
                 section_titles=section_titles,
                 section_paths=section_paths,
                 pages=pages,
+                chunk_strategies=chunk_strategies,
             )
 
             await db.execute(
@@ -334,6 +336,7 @@ class IngestionService:
                 section_titles = [chunk.metadata.get("section_title", "") for chunk in chunks]
                 section_paths = [chunk.metadata.get("section_path", "") for chunk in chunks]
                 pages = [chunk.metadata.get("page") for chunk in chunks]
+                chunk_strategies = [chunk.metadata.get("chunk_strategy", "recursive") for chunk in chunks]
 
                 embeddings = await embedding_service.embed_documents(texts)
 
@@ -347,6 +350,7 @@ class IngestionService:
                     section_titles=section_titles,
                     section_paths=section_paths,
                     pages=pages,
+                    chunk_strategies=chunk_strategies,
                 )
 
                 await db.execute(

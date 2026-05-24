@@ -147,9 +147,17 @@ EMBED_MODEL=your-embedding-model
 
 ### 5. 启动后端
 
+确保已激活虚拟环境且位于项目根目录：
+
 ```bash
-PYTHONPATH=backend RAG_ENGINE=rag_lab python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+# 激活虚拟环境（如未激活）
+source .venv/bin/activate
+
+# 启动后端（项目根目录执行）
+PYTHONPATH=backend python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
+
+> `RAG_ENGINE` 默认为 `rag_lab`，已在 `.env` 中配置，无需在命令行重复指定。
 
 - API 根地址：`http://localhost:8000`
 - Swagger 文档：`http://localhost:8000/docs`
@@ -158,10 +166,12 @@ PYTHONPATH=backend RAG_ENGINE=rag_lab python -m uvicorn app.main:app --host 0.0.
 ### 6. 启动前端
 
 ```bash
-npm --prefix frontend run dev
+npm --prefix frontend run dev -- --host 0.0.0.0
 ```
 
 访问 `http://localhost:5173` 进入 RAG Knowledge Console。
+
+> 如果 5173 端口被占用，Vite 会自动使用下一个可用端口。前端开发服务器内置了 `/api` 代理到 `http://localhost:8000`，无需额外配置。
 
 ### 7. Docker 启动（可选）
 

@@ -34,17 +34,17 @@ export function ToastContainer() {
 
   const icon = (type: ToastType) => {
     switch (type) {
-      case 'success': return <CheckCircle className="w-4 h-4 text-green-500" />;
-      case 'error': return <AlertCircle className="w-4 h-4 text-red-500" />;
-      case 'warning': return <AlertTriangle className="w-4 h-4 text-yellow-500" />;
+      case 'success': return <CheckCircle className="h-4 w-4 text-emerald-500" />;
+      case 'error': return <AlertCircle className="h-4 w-4 text-red-500" />;
+      case 'warning': return <AlertTriangle className="h-4 w-4 text-amber-500" />;
     }
   };
 
   const bg = (type: ToastType) => {
     switch (type) {
-      case 'success': return 'bg-green-50 border-green-200';
-      case 'error': return 'bg-red-50 border-red-200';
-      case 'warning': return 'bg-yellow-50 border-yellow-200';
+      case 'success': return 'bg-white border-emerald-200';
+      case 'error': return 'bg-white border-red-200';
+      case 'warning': return 'bg-white border-amber-200';
     }
   };
 
@@ -53,12 +53,16 @@ export function ToastContainer() {
       {toasts.map((t) => (
         <div
           key={t.id}
-          className={`flex items-start gap-2 px-4 py-3 rounded-lg border shadow-lg text-sm ${bg(t.type)}`}
+          className={`flex items-start gap-2.5 px-4 py-3 rounded-xl border shadow-elevated text-sm animate-slide-up ${bg(t.type)}`}
         >
           <span className="flex-shrink-0 mt-0.5">{icon(t.type)}</span>
-          <span className="flex-1 text-gray-700 whitespace-pre-wrap">{t.message}</span>
-          <button className="flex-shrink-0 text-gray-400 hover:text-gray-600" onClick={() => remove(t.id)}>
-            <X className="w-3.5 h-3.5" />
+          <span className="flex-1 text-text-primary whitespace-pre-wrap text-xs leading-5">{t.message}</span>
+          <button
+            className="flex-shrink-0 p-0.5 rounded text-text-tertiary hover:text-text-secondary hover:bg-surface-50 transition-colors"
+            onClick={() => remove(t.id)}
+            aria-label="关闭通知"
+          >
+            <X className="h-3.5 w-3.5" />
           </button>
         </div>
       ))}

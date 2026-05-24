@@ -1,13 +1,9 @@
 import { useState } from 'react';
 import { RefreshCw, Loader2, X, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { DocumentUploader } from './DocumentUploader';
-import { DocumentList } from './DocumentList';
-import { IndexStatusPanel } from './IndexStatusPanel';
-import { RagEngineStatusPanel } from './RagEngineStatusPanel';
-import { ConfirmModal } from '../shared/ConfirmModal';
-import { toast } from '../shared/toast';
 import { rebuildIndex } from '../../api/knowledgeBase';
 import { useAppStore } from '../../store/appStore';
+import { ConfirmModal } from '../shared/ConfirmModal';
+import { toast } from '../shared/toast';
 import type { RebuildIndexResponse } from '../../types';
 
 export function DocumentManager() {
@@ -33,7 +29,6 @@ export function DocumentManager() {
       } else {
         toast('error', '索引重建失败');
       }
-      // Trigger document list refresh
       window.dispatchEvent(new Event('documents-changed'));
     } catch {
       toast('error', '重建索引失败');
@@ -42,42 +37,10 @@ export function DocumentManager() {
     }
   };
 
-  const statusBadge = (status: string) => {
-    switch (status) {
-      case 'completed': return <CheckCircle2 className="w-5 h-5 text-green-500" />;
-      case 'partial': return <AlertCircle className="w-5 h-5 text-yellow-500" />;
-      case 'failed': return <AlertCircle className="w-5 h-5 text-red-500" />;
-      default: return null;
-    }
-  };
+  if (!activeKnowledgeBaseId) return null;
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between px-2">
-        <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">文档</span>
-        {activeKnowledgeBaseId && (
-          <button
-            onClick={() => setRebuildConfirm(true)}
-            disabled={rebuilding}
-            className="flex items-center gap-1 text-xs text-gray-400 hover:text-blue-600 transition-colors disabled:opacity-50"
-            title="重建索引"
-          >
-            {rebuilding ? (
-              <Loader2 className="w-3 h-3 animate-spin" />
-            ) : (
-              <RefreshCw className="w-3 h-3" />
-            )}
-            重建索引
-          </button>
-        )}
-      </div>
-
-      <IndexStatusPanel />
-      <RagEngineStatusPanel />
-
-      <DocumentUploader />
-      <DocumentList />
-
+    <>
       <ConfirmModal
         open={rebuildConfirm}
         title="重建索引"
@@ -88,71 +51,78 @@ export function DocumentManager() {
         onCancel={() => setRebuildConfirm(false)}
       />
 
-      {/* Rebuild result modal */}
+      <button
+        onClick={() => setRebuildConfirm(true)}
+        disabled={rebuilding}
+        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-text-secondary bg-surface-50 border border-surface-200 rounded-xl hover:bg-surface-100 hover:text-text-primary disabled:opacity-50 transition-colors"
+      >
+        {rebuilding ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <RefreshCw className="h-4 w-4" />
+        )}
+        {rebuilding ? '重建中...' : '重建索引'}
+      </button>
+
       {rebuildResult && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setRebuildResult(null)} />
-          <div className="relative bg-white rounded-xl shadow-xl max-w-sm w-full mx-4 p-6">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setRebuildResult(null)} />
+          <div className="relative bg-white rounded-2xl shadow-elevated max-w-sm w-full mx-4 p-6 animate-slide-up">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                {statusBadge(rebuildResult.status)}
-                <h3 className="text-lg font-semibold text-gray-900">重建结果</h3>
+                {rebuildResult.status === 'completed' ? (
+                  <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                ) : rebuildResult.status === 'partial' ? (
+                  <AlertCircle className="h-5 w-5 text-amber-500" />
+                ) : (
+                  <AlertCircle className="h-5 w-5 text-red-500" />
+                )}
+                <h3 className="text-lg font-semibold text-text-primary">重建结果</h3>
               </div>
               <button
-                className="text-gray-400 hover:text-gray-600"
+                className="p-1 rounded-lg text-text-tertiary hover:text-text-secondary hover:bg-surface-50"
                 onClick={() => setRebuildResult(null)}
               >
-                <X className="w-5 h-5" />
+                <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="space-y-2 text-sm text-gray-600">
-              <div className="flex justify-between">
-                <span>状态</span>
-                <span className={`font-medium ${
-                  rebuildResult.status === 'completed' ? 'text-green-600' :
-                  rebuildResult.status === 'partial' ? 'text-yellow-600' : 'text-red-600'
-                }`}>{rebuildResult.status}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>文档总数</span>
-                <span>{rebuildResult.document_count}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>成功</span>
-                <span className="text-green-600">{rebuildResult.success_documents}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>向量块数</span>
-                <span>{rebuildResult.chunk_count}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>BM25 块数</span>
-                <span>{rebuildResult.bm25_chunk_count}</span>
-              </div>
-
-              {rebuildResult.failed_documents.length > 0 && (
-                <div className="mt-3 pt-3 border-t">
-                  <span className="text-red-600 font-medium">失败文档：</span>
-                  {rebuildResult.failed_documents.map((fd) => (
-                    <div key={fd.doc_id} className="mt-1 text-xs text-red-500">
-                      <span className="font-medium">{fd.filename}</span>: {fd.error}
-                    </div>
-                  ))}
+            <div className="space-y-2 text-sm">
+              {[
+                { label: '状态', value: rebuildResult.status, color: rebuildResult.status === 'completed' ? 'text-emerald-600' : rebuildResult.status === 'partial' ? 'text-amber-600' : 'text-red-600' },
+                { label: '文档总数', value: rebuildResult.document_count },
+                { label: '成功', value: rebuildResult.success_documents, color: 'text-emerald-600' },
+                { label: '向量块数', value: rebuildResult.chunk_count },
+                { label: 'BM25 块数', value: rebuildResult.bm25_chunk_count },
+              ].map(({ label, value, color }) => (
+                <div key={label} className="flex justify-between">
+                  <span className="text-text-tertiary">{label}</span>
+                  <span className={`font-medium ${color ?? 'text-text-primary'}`}>{value}</span>
                 </div>
-              )}
-
-              {rebuildResult.warnings.length > 0 && (
-                <div className="mt-2 pt-2 border-t">
-                  {rebuildResult.warnings.map((w, i) => (
-                    <div key={i} className="text-xs text-yellow-600">{w}</div>
-                  ))}
-                </div>
-              )}
+              ))}
             </div>
 
+            {rebuildResult.failed_documents.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-surface-100">
+                <span className="text-sm font-medium text-red-600">失败文档：</span>
+                {rebuildResult.failed_documents.map((fd) => (
+                  <div key={fd.doc_id} className="mt-1 text-xs text-red-500">
+                    <span className="font-medium">{fd.filename}</span>: {fd.error}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {rebuildResult.warnings.length > 0 && (
+              <div className="mt-2 pt-2 border-t border-surface-100">
+                {rebuildResult.warnings.map((w, i) => (
+                  <div key={i} className="text-xs text-amber-600">{w}</div>
+                ))}
+              </div>
+            )}
+
             <button
-              className="mt-4 w-full px-4 py-2 text-sm font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              className="mt-4 w-full px-4 py-2.5 text-sm font-medium bg-surface-100 text-text-secondary rounded-xl hover:bg-surface-200 transition-colors"
               onClick={() => setRebuildResult(null)}
             >
               关闭
@@ -160,6 +130,6 @@ export function DocumentManager() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

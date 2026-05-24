@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Square } from 'lucide-react';
+import { Send, Square, Loader2 } from 'lucide-react';
 
 interface Props {
   onSend: (query: string) => void;
@@ -22,6 +22,9 @@ export function ChatInput({ onSend, onCancel, isStreaming }: Props) {
     if (!trimmed || isStreaming) return;
     onSend(trimmed);
     setInput('');
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -32,27 +35,36 @@ export function ChatInput({ onSend, onCancel, isStreaming }: Props) {
   };
 
   return (
-    <div className="border-t border-gray-100 p-4">
+    <div className="flex-shrink-0 border-t border-surface-100 bg-white px-4 py-4">
       <div className="flex items-end gap-3 max-w-3xl mx-auto">
-        <textarea
-          ref={textareaRef}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="输入您的问题..."
-          rows={1}
-          className="flex-1 resize-none border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none max-h-32"
-          disabled={isStreaming}
-          onInput={(e) => {
-            const el = e.currentTarget;
-            el.style.height = 'auto';
-            el.style.height = Math.min(el.scrollHeight, 128) + 'px';
-          }}
-        />
+        <div className="flex-1 relative">
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={isStreaming ? '正在生成回答...' : '输入您的问题，Enter 发送，Shift+Enter 换行'}
+            rows={1}
+            className="w-full resize-none border border-surface-200 rounded-2xl px-4 py-3 pr-10 text-sm leading-5 bg-surface-50 placeholder:text-text-tertiary focus:bg-white focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400 outline-none transition-all max-h-36"
+            disabled={isStreaming}
+            onInput={(e) => {
+              const el = e.currentTarget;
+              el.style.height = 'auto';
+              el.style.height = Math.min(el.scrollHeight, 144) + 'px';
+            }}
+            aria-label="输入问题"
+          />
+          {isStreaming && (
+            <div className="absolute right-3 bottom-3">
+              <Loader2 className="h-4 w-4 text-brand-500 animate-spin" />
+            </div>
+          )}
+        </div>
         {isStreaming ? (
           <button
             onClick={onCancel}
-            className="flex-shrink-0 p-3 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors"
+            className="flex-shrink-0 p-3 bg-red-500 text-white rounded-2xl hover:bg-red-600 transition-all shadow-sm hover:shadow-md"
+            aria-label="停止生成"
           >
             <Square className="w-4 h-4" fill="currentColor" />
           </button>
@@ -60,12 +72,16 @@ export function ChatInput({ onSend, onCancel, isStreaming }: Props) {
           <button
             onClick={handleSend}
             disabled={!input.trim()}
-            className="flex-shrink-0 p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="flex-shrink-0 p-3 bg-brand-600 text-white rounded-2xl hover:bg-brand-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md"
+            aria-label="发送消息"
           >
             <Send className="w-4 h-4" />
           </button>
         )}
       </div>
+      <p className="text-center text-[10px] text-text-tertiary mt-2">
+        RAG 检索增强生成 · 回答基于知识库文档内容
+      </p>
     </div>
   );
 }

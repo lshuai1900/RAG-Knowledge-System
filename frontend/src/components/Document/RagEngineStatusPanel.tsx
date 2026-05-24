@@ -12,6 +12,7 @@ import {
   Search,
 } from 'lucide-react';
 import { getRagStatus } from '../../api/rag';
+import { Card } from '../shared/Card';
 import type { RagStatus } from '../../types';
 
 type Tone = 'green' | 'gray' | 'blue' | 'purple';
@@ -19,7 +20,7 @@ type Tone = 'green' | 'gray' | 'blue' | 'purple';
 const toneClasses: Record<Tone, string> = {
   green: 'border-emerald-200 bg-emerald-50 text-emerald-700',
   gray: 'border-slate-200 bg-slate-100 text-slate-600',
-  blue: 'border-sky-200 bg-sky-50 text-sky-700',
+  blue: 'border-brand-200 bg-brand-50 text-brand-700',
   purple: 'border-violet-200 bg-violet-50 text-violet-700',
 };
 
@@ -33,9 +34,7 @@ const pipelineSteps = [
 ];
 
 function formatValue(value: string | number | boolean) {
-  if (typeof value === 'boolean') {
-    return value ? 'true' : 'false';
-  }
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
   return String(value);
 }
 
@@ -48,7 +47,7 @@ function getTone(value: string | number | boolean): Tone {
   return 'blue';
 }
 
-function Badge({ value, tone }: { value: string | number | boolean; tone?: Tone }) {
+function ConfigBadge({ value, tone }: { value: string | number | boolean; tone?: Tone }) {
   const display = formatValue(value);
   return (
     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-4 ${toneClasses[tone ?? getTone(value)]}`}>
@@ -62,39 +61,40 @@ export function RagEngineStatusPanel() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
 
+  const fetchStatus = async () => {
+    setLoading(true);
+    setError(false);
+    try {
+      const res = await getRagStatus();
+      setData(res);
+    } catch {
+      setData(null);
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
-
-    const fetchStatus = async () => {
+    (async () => {
       setLoading(true);
       setError(false);
       try {
         const res = await getRagStatus();
-        if (!cancelled) {
-          setData(res);
-        }
+        if (!cancelled) setData(res);
       } catch {
-        if (!cancelled) {
-          setData(null);
-          setError(true);
-        }
+        if (!cancelled) { setData(null); setError(true); }
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
-    };
-
-    fetchStatus();
-
-    return () => {
-      cancelled = true;
-    };
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   const engine = data?.RAG_ENGINE?.toLowerCase() ?? '';
   const connected = engine === 'rag_lab';
-  const engineMessage = connected ? '当前使用增强 RAG 引擎' : '当前使用 legacy 回滚模式';
+  const engineMessage = connected ? '当前使用增强 RAG 引擎 (rag_lab)' : '当前使用 legacy 回滚模式';
 
   const configItems = useMemo(() => {
     if (!data) return [];
@@ -109,67 +109,88 @@ export function RagEngineStatusPanel() {
   }, [data]);
 
   return (
-    <section className="mx-2 rounded-xl border border-gray-200 bg-white p-3 text-xs shadow-sm">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-50 text-sky-600">
-            <Cpu className="h-3.5 w-3.5" />
-          </span>
+    <Card className="text-xs">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+            <Cpu className="h-5 w-5" />
+          </div>
           <div>
-            <div className="font-semibold text-gray-900">RAG 引擎状态</div>
-            <div className="mt-0.5 text-[11px] text-gray-400">配置与增强能力</div>
+            <h3 className="font-semibold text-text-primary text-sm">RAG 引擎状态</h3>
+            <p className="mt-0.5 text-[11px] text-text-tertiary">配置与增强检索能力</p>
           </div>
         </div>
-        <div className="flex flex-col items-end gap-1">
-          <Badge value={connected ? '已接入' : '未接入'} tone={connected ? 'green' : 'gray'} />
-          {data && <Badge value={data.RAG_ENGINE} />}
-          {loading && <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" />}
+        <div className="flex items-center gap-1.5">
+          {data && (
+            <ConfigBadge value={connected ? 'rag_lab' : 'legacy'} tone={connected ? 'green' : 'gray'} />
+          )}
+          {loading && <Loader2 className="h-3.5 w-3.5 animate-spin text-text-tertiary" />}
         </div>
       </div>
 
       {data ? (
-        <div className="mt-3 space-y-3">
-          <div className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-2 ${connected ? 'border-emerald-100 bg-emerald-50/70 text-emerald-700' : 'border-slate-200 bg-slate-50 text-slate-600'}`}>
-            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-            <span className="font-medium">{engineMessage}</span>
+        <div className="mt-4 space-y-4">
+          <div className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 ${connected ? 'border-emerald-100 bg-emerald-50/70 text-emerald-700' : 'border-slate-200 bg-slate-50 text-slate-600'}`}>
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            <span className="font-medium text-xs">{engineMessage}</span>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2.5">
             {configItems.map((item) => (
-              <div key={item.label} className="rounded-lg border border-gray-200 bg-gray-50/80 p-2">
-                <div className="mb-1 text-[10px] font-medium text-gray-400">{item.label}</div>
-                <Badge value={item.value} />
+              <div key={item.label} className="rounded-xl border border-surface-200 bg-surface-50 p-3">
+                <div className="mb-1 text-[10px] font-medium text-text-tertiary">{item.label}</div>
+                <ConfigBadge value={item.value} />
               </div>
             ))}
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-gradient-to-r from-gray-50 to-sky-50/40 p-2.5">
-            <div className="mb-2 text-[10px] font-medium text-gray-400">RAG 流程</div>
+          <div className="rounded-xl border border-surface-200 bg-gradient-to-r from-surface-50 to-brand-50/20 p-3.5">
+            <div className="mb-2.5 text-[10px] font-semibold text-text-tertiary uppercase tracking-wide">RAG 流水线</div>
             <div className="flex flex-wrap items-center gap-1.5">
               {pipelineSteps.map((step, index) => {
                 const Icon = step.icon;
                 const disabled = step.label === 'Rerank' && !data.RAG_USE_RERANK;
                 return (
-                  <div key={step.label} className="flex items-center gap-1.5">
-                    <div className={`flex items-center gap-1 rounded-full border px-2 py-1 ${disabled ? 'border-gray-200 bg-white text-gray-400' : 'border-sky-100 bg-white text-gray-600'}`}>
-                      <Icon className="h-3 w-3" />
-                      <span className="text-[10px] font-medium">{step.label}</span>
-                    </div>
-                    {index < pipelineSteps.length - 1 && <span className="text-gray-300">→</span>}
-                  </div>
+                  <span key={step.label} className="flex items-center gap-1.5">
+                    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[10px] font-medium ${
+                      disabled
+                        ? 'border-surface-200 bg-white text-text-tertiary'
+                        : 'border-brand-100 bg-white text-text-secondary shadow-sm'
+                    }`}>
+                      <Icon className={`h-3 w-3 ${disabled ? 'text-text-tertiary' : 'text-brand-500'}`} />
+                      {step.label}
+                    </span>
+                    {index < pipelineSteps.length - 1 && (
+                      <span className="text-text-tertiary text-[10px]">→</span>
+                    )}
+                  </span>
                 );
               })}
             </div>
           </div>
         </div>
       ) : (
-        <div className="mt-3 rounded-lg border border-amber-100 bg-amber-50 px-2.5 py-2 text-amber-700">
-          <div className="flex items-center gap-1.5">
-            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <AlertCircle className="h-3.5 w-3.5" />}
-            <span>{loading ? '正在读取 RAG 配置...' : error ? '暂时无法获取 RAG 引擎状态' : '暂无 RAG 引擎状态'}</span>
+        <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-amber-700">
+          <div className="flex items-center gap-2">
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : error ? (
+              <AlertCircle className="h-4 w-4" />
+            ) : null}
+            <span className="text-xs">
+              {loading ? '正在获取 RAG 配置...' : error ? '暂时无法获取 RAG 引擎状态' : '暂无 RAG 引擎状态数据'}
+            </span>
+            {error && (
+              <button
+                onClick={fetchStatus}
+                className="ml-auto text-xs font-medium text-amber-700 hover:underline"
+              >
+                重试
+              </button>
+            )}
           </div>
         </div>
       )}
-    </section>
+    </Card>
   );
 }

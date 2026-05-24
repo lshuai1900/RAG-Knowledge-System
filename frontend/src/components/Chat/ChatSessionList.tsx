@@ -1,20 +1,16 @@
-import { useEffect } from 'react';
-import { MessageSquare, Trash2, Plus } from 'lucide-react';
-import { listSessions, deleteSession, createSession } from '../../api/chat';
+import { useState } from 'react';
+import { MessageSquare, Trash2, Loader2 } from 'lucide-react';
+import { deleteSession } from '../../api/chat';
 import { useAppStore } from '../../store/appStore';
 
-export function ChatSessionList() {
-  const { activeKnowledgeBaseId, activeSessionId, setActiveSession, chatSessions, setChatSessions } = useAppStore();
+interface Props {
+  compact?: boolean;
+  sessionsLoading?: boolean;
+}
 
-  useEffect(() => {
-    if (!activeKnowledgeBaseId) { setChatSessions([]); return; }
-    (async () => {
-      try {
-        const sessions = await listSessions(activeKnowledgeBaseId);
-        setChatSessions(sessions);
-      } catch { console.error('Failed to list sessions'); }
-    })();
-  }, [activeKnowledgeBaseId, setChatSessions]);
+export function ChatSessionList({ compact = false, sessionsLoading = false }: Props) {
+  const { activeSessionId, setActiveSession, chatSessions, setChatSessions } = useAppStore();
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const handleDelete = async (sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -23,50 +19,87 @@ export function ChatSessionList() {
       await deleteSession(sessionId);
       if (activeSessionId === sessionId) setActiveSession(null);
       setChatSessions(chatSessions.filter((s) => s.id !== sessionId));
-    } catch { console.error('Chat session operation failed'); }
+    } catch { /* ignore */ }
   };
 
-  const handleNewSession = async () => {
-    if (!activeKnowledgeBaseId) return;
-    try {
-      const session = await createSession(activeKnowledgeBaseId, '新对话');
-      setActiveSession(session.id);
-      setChatSessions([session, ...chatSessions]);
-    } catch { console.error('Chat session operation failed'); }
+  const handleSelectSession = (sessionId: string) => {
+    setActiveSession(sessionId);
+    setDropdownOpen(false);
   };
 
-  if (!activeKnowledgeBaseId) return null;
+  if (compact) {
+    const isVisible = dropdownOpen;
+
+    return (
+      <div className="relative">
+        <button
+          onClick={() => setDropdownOpen(!dropdownOpen)}
+          className="text-xs text-text-tertiary hover:text-text-secondary transition-colors px-2 py-1 rounded-lg hover:bg-surface-50"
+        >
+          {chatSessions.length > 0 ? `${chatSessions.length} 个会话` : '会话'}
+        </button>
+        {isVisible && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setDropdownOpen(false)} />
+            <div className="absolute right-0 top-full mt-1 w-64 bg-white rounded-xl border border-surface-200 shadow-elevated p-1 z-50 max-h-64 overflow-y-auto animate-fade-in">
+          {sessionsLoading ? (
+            <div className="flex items-center gap-2 px-3 py-2 text-xs text-text-tertiary">
+              <Loader2 className="h-3 w-3 animate-spin" /> 加载中...
+            </div>
+          ) : chatSessions.length === 0 ? (
+            <p className="text-xs text-text-tertiary px-3 py-2">暂无对话</p>
+          ) : (
+            chatSessions.map((s) => (
+              <div
+                key={s.id}
+                onClick={() => handleSelectSession(s.id)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+                  s.id === activeSessionId
+                    ? 'bg-brand-50 text-brand-700'
+                    : 'hover:bg-surface-50 text-text-secondary'
+                }`}
+              >
+                <MessageSquare className="h-3.5 w-3.5 flex-shrink-0" />
+                <span className="text-xs flex-1 truncate">{s.title || '新对话'}</span>
+                <span className="text-[10px] text-text-tertiary">{s.message_count}</span>
+                <Trash2
+                  className="h-3 w-3 text-text-tertiary hover:text-red-500 flex-shrink-0"
+                  onClick={(e) => handleDelete(s.id, e)}
+                />
+              </div>
+            ))
+          )}
+        </div>
+          </>
+        )}
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-0.5">
       <div className="flex items-center justify-between px-2 mb-1">
-        <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">对话</span>
-        <button
-          onClick={handleNewSession}
-          title="新建对话"
-          className="text-gray-400 hover:text-blue-600 transition-colors"
-        >
-          <Plus className="w-3.5 h-3.5" />
-        </button>
+        <span className="text-xs font-medium text-text-tertiary uppercase tracking-wide">历史对话</span>
+        {sessionsLoading && <Loader2 className="h-3 w-3 animate-spin text-text-tertiary" />}
       </div>
       {chatSessions.length === 0 ? (
-        <p className="text-xs text-gray-400 px-2">暂无对话</p>
+        <p className="text-xs text-text-tertiary px-2">暂无对话</p>
       ) : (
         chatSessions.map((s) => (
           <div
             key={s.id}
             onClick={() => setActiveSession(s.id)}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg cursor-pointer group transition-colors ${
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer group/item transition-colors ${
               s.id === activeSessionId
-                ? 'bg-blue-50 text-blue-700'
-                : 'hover:bg-gray-50 text-gray-700'
+                ? 'bg-brand-50 text-brand-700'
+                : 'hover:bg-surface-50 text-text-secondary'
             }`}
           >
-            <MessageSquare className="w-3.5 h-3.5 flex-shrink-0" />
-            <span className="text-sm flex-1 truncate">{s.title || '新对话'}</span>
-            <span className="text-xs text-gray-400 flex-shrink-0">{s.message_count}</span>
+            <MessageSquare className="h-3.5 w-3.5 flex-shrink-0" />
+            <span className="text-xs flex-1 truncate">{s.title || '新对话'}</span>
+            <span className="text-[10px] text-text-tertiary">{s.message_count}</span>
             <Trash2
-              className="w-3 h-3 text-gray-300 hover:text-red-500 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+              className="h-3 w-3 text-text-tertiary hover:text-red-500 flex-shrink-0 opacity-0 group-hover/item:opacity-100 transition-opacity"
               onClick={(e) => handleDelete(s.id, e)}
             />
           </div>

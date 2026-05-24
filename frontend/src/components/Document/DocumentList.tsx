@@ -3,7 +3,25 @@ import { Trash2, FileText, Loader2, AlertCircle, CheckCircle2, Clock } from 'luc
 import { listDocuments, deleteDocument } from '../../api/document';
 import { useAppStore } from '../../store/appStore';
 import { ConfirmModal } from '../shared/ConfirmModal';
+import { EmptyState } from '../shared/EmptyState';
+import { StatusPill } from '../shared/StatusPill';
 import { toast } from '../shared/toast';
+
+function statusMeta(status: string) {
+  switch (status) {
+    case 'pending': return { icon: Clock, variant: 'neutral' as const, label: '等待中' };
+    case 'processing': return { icon: Loader2, variant: 'info' as const, label: '解析中', spin: true };
+    case 'ready': return { icon: CheckCircle2, variant: 'success' as const, label: '就绪' };
+    case 'failed': return { icon: AlertCircle, variant: 'error' as const, label: '失败' };
+    default: return { icon: FileText, variant: 'neutral' as const, label: status };
+  }
+}
+
+function formatSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 export function DocumentList() {
   const { activeKnowledgeBaseId, documents, setDocuments } = useAppStore();
@@ -21,7 +39,7 @@ export function DocumentList() {
       const data = await listDocuments(activeKnowledgeBaseId);
       setDocuments(data);
     } catch {
-      setError('加载文档失败');
+      setError('加载文档列表失败');
     } finally {
       setLoading(false);
     }
@@ -36,7 +54,6 @@ export function DocumentList() {
     return () => window.removeEventListener('documents-changed', handler);
   }, [fetchDocs]);
 
-  // Auto-poll while any document is pending/processing
   useEffect(() => {
     const hasProcessing = documents.some(
       (d) => d.status === 'pending' || d.status === 'processing'
@@ -70,19 +87,42 @@ export function DocumentList() {
     }
   };
 
-  const statusIcon = (status: string) => {
-    switch (status) {
-      case 'pending': return <Clock className="w-3.5 h-3.5 text-gray-400" />;
-      case 'processing': return <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin" />;
-      case 'ready': return <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />;
-      case 'failed': return <AlertCircle className="w-3.5 h-3.5 text-red-500" />;
-      default: return null;
-    }
-  };
-
   if (!activeKnowledgeBaseId) return null;
-  if (loading) return <div className="flex items-center gap-2 text-sm text-gray-400 px-2"><Loader2 className="w-4 h-4 animate-spin" /> 加载中...</div>;
-  if (error) return <div className="text-sm text-red-500 px-2">{error}</div>;
+
+  if (loading && documents.length === 0) {
+    return (
+      <div className="space-y-2">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="flex items-center gap-3 p-3">
+            <div className="skeleton h-8 w-8 rounded-lg" />
+            <div className="flex-1 space-y-2">
+              <div className="skeleton h-3 w-3/4" />
+              <div className="skeleton h-2 w-1/2" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-red-500 text-sm">{error}</p>
+        <button onClick={fetchDocs} className="mt-2 text-sm text-brand-600 hover:underline">重试</button>
+      </div>
+    );
+  }
+
+  if (documents.length === 0) {
+    return (
+      <EmptyState
+        icon={<FileText className="h-6 w-6" />}
+        title="暂无文档"
+        description="上传 PDF、TXT、MD 或 DOCX 文件开始构建知识索引"
+      />
+    );
+  }
 
   return (
     <>
@@ -96,29 +136,39 @@ export function DocumentList() {
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeleteTarget(null)}
       />
-      <div className="space-y-1">
-        {documents.length === 0 ? (
-          <p className="text-sm text-gray-400 px-2">暂无文档</p>
-        ) : (
-          documents.map((doc) => (
-            <div key={doc.id} className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-gray-50 group">
-              <FileText className="w-4 h-4 text-gray-400 flex-shrink-0" />
+      <div className="space-y-1.5">
+        {documents.map((doc) => {
+          const meta = statusMeta(doc.status);
+          return (
+            <div
+              key={doc.id}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-surface-50 group transition-colors"
+            >
+              <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-surface-100 text-text-tertiary">
+                <FileText className="h-4 w-4" />
+              </div>
               <div className="flex-1 min-w-0">
-                <div className="text-sm text-gray-700 truncate">{doc.filename}</div>
-                <div className="flex items-center gap-1">
-                  {statusIcon(doc.status)}
-                  <span className="text-xs text-gray-400">
-                    {doc.status === 'ready' ? `${doc.chunk_count} 个文本块` : doc.status}
-                  </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-text-primary truncate font-medium">{doc.filename}</span>
+                  <StatusPill label={meta.label} variant={meta.variant} />
+                </div>
+                <div className="flex items-center gap-2 mt-0.5 text-xs text-text-tertiary">
+                  <span>{formatSize(doc.file_size ?? 0)}</span>
+                  {doc.chunk_count > 0 && (
+                    <span>{doc.chunk_count} 个文本块</span>
+                  )}
                 </div>
               </div>
-              <Trash2
-                className="w-3.5 h-3.5 text-gray-300 hover:text-red-500 cursor-pointer flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+              <button
                 onClick={() => setDeleteTarget(doc.id)}
-              />
+                className="p-1.5 rounded-lg text-text-tertiary hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
+                aria-label={`删除 ${doc.filename}`}
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
             </div>
-          ))
-        )}
+          );
+        })}
       </div>
     </>
   );

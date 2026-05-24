@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   BookOpen, Cpu, Search, ArrowRight, Layers,
-  Zap, Shield, Activity, AlertCircle,
+  Zap, Shield, Activity, AlertCircle, WifiOff, RefreshCw,
 } from 'lucide-react';
 import { Card } from '../shared/Card';
 import { Badge } from '../shared/Badge';
@@ -21,21 +21,30 @@ export function DashboardView({ onNavigate }: Props) {
   const [loadingKBs, setLoadingKBs] = useState(true);
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [statusError, setStatusError] = useState(false);
+  const [statusErrorMsg, setStatusErrorMsg] = useState('');
 
   const fetchData = useCallback(async () => {
     setLoadingKBs(true);
     setLoadingStatus(true);
     setStatusError(false);
+    setStatusErrorMsg('');
     try {
       const [kbs, status] = await Promise.allSettled([
         listKnowledgeBases(),
         getRagStatus(),
       ]);
       if (kbs.status === 'fulfilled') setKnowledgeBases(kbs.value);
-      if (status.status === 'fulfilled') setRagStatus(status.value);
-      else setStatusError(true);
-    } catch { /* use defaults */ }
-    finally {
+      if (status.status === 'fulfilled') {
+        setRagStatus(status.value);
+        setStatusError(false);
+      } else {
+        setStatusError(true);
+        setStatusErrorMsg(status.reason?.message || '无法连接后端服务');
+      }
+    } catch {
+      setStatusError(true);
+      setStatusErrorMsg('网络请求失败');
+    } finally {
       setLoadingKBs(false);
       setLoadingStatus(false);
     }
@@ -44,51 +53,66 @@ export function DashboardView({ onNavigate }: Props) {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const totalDocs = knowledgeBases.reduce((sum, kb) => sum + (kb.document_count ?? 0), 0);
-  const provider = ragStatus?.embedding_provider || ragStatus?.RAG_ENGINE || '—';
-  const retrievalMode = ragStatus?.retrieval_mode || ragStatus?.RAG_RETRIEVAL_MODE || '—';
-  const useRerank = ragStatus?.use_rerank ?? ragStatus?.RAG_USE_RERANK ?? false;
-  const chunkStrategy = ragStatus?.chunk_strategy || ragStatus?.CHUNK_STRATEGY || '—';
-  const chunksCount = ragStatus?.chunks_count ?? 0;
-  const indexReady = ragStatus?.index_ready ?? false;
-  const health = ragStatus?.health || 'unknown';
+  const statusOk = !statusError && ragStatus !== null;
+  const documentCount = ragStatus?.documents_count
+    ?? knowledgeBases.reduce((sum, kb) => sum + (kb.document_count ?? 0), 0);
+  const provider = statusOk ? (ragStatus!.embedding_provider || ragStatus!.RAG_ENGINE || '—') : '—';
+  const retrievalMode = statusOk ? (ragStatus!.retrieval_mode || ragStatus!.RAG_RETRIEVAL_MODE || '—') : '—';
+  const useRerank = statusOk ? (ragStatus!.use_rerank ?? ragStatus!.RAG_USE_RERANK ?? false) : false;
+  const chunkStrategy = statusOk ? (ragStatus!.chunk_strategy || ragStatus!.CHUNK_STRATEGY || '—') : '—';
+  const chunksCount = statusOk ? (ragStatus!.chunks_count ?? 0) : null;
+  const indexReady = statusOk ? (ragStatus!.index_ready ?? false) : null;
+  const health = statusOk ? (ragStatus!.health || 'unknown') : null;
   const isHash = provider === 'hash' || provider === 'hash-sha256-256d';
 
   const statCards = [
     {
       label: '知识库', value: loadingKBs ? '...' : knowledgeBases.length,
       icon: BookOpen, color: 'text-brand-600 bg-brand-50',
-      sub: knowledgeBases.length === 0 ? '创建第一个知识库' : `${totalDocs} 篇文档`,
+      sub: !statusOk && !loadingKBs ? '后端未连接'
+        : knowledgeBases.length === 0 ? '创建第一个知识库'
+        : `${documentCount} 篇文档`,
       view: 'knowledge-bases' as ViewType,
+      ok: true,
     },
     {
-      label: 'Chunk 数量', value: loadingStatus ? '...' : chunksCount,
+      label: 'Chunk 数量',
+      value: loadingStatus ? '...' : !statusOk ? '—' : chunksCount ?? 0,
       icon: Layers, color: 'text-emerald-600 bg-emerald-50',
-      sub: indexReady ? '索引就绪' : chunksCount > 0 ? '索引待建' : '上传文档建立索引',
+      sub: !statusOk ? '状态不可用'
+        : indexReady ? '索引就绪'
+        : (chunksCount ?? 0) > 0 ? '索引待建'
+        : '上传文档建立索引',
       view: 'documents' as ViewType,
+      ok: statusOk,
     },
     {
-      label: 'Embedding', value: loadingStatus ? '...' : provider,
+      label: 'Embedding',
+      value: loadingStatus ? '...' : !statusOk ? '离线' : provider,
       icon: Cpu, color: isHash ? 'text-amber-600 bg-amber-50' : 'text-violet-600 bg-violet-50',
-      sub: isHash ? 'Hash 演示模式' : '远程 Embedding',
+      sub: !statusOk ? '后端未连接'
+        : isHash ? 'Hash 演示模式'
+        : '远程 Embedding',
       view: 'rag-status' as ViewType,
+      ok: true,
     },
     {
-      label: '检索模式', value: loadingStatus ? '...' : retrievalMode,
+      label: '检索模式', value: loadingStatus ? '...' : !statusOk ? '离线' : retrievalMode,
       icon: Search, color: 'text-sky-600 bg-sky-50',
-      sub: useRerank ? 'Rerank 已启用' : 'Rerank 未启用',
+      sub: !statusOk ? '后端未连接' : useRerank ? 'Rerank 已启用' : 'Rerank 未启用',
       view: 'rag-status' as ViewType,
+      ok: statusOk,
     },
   ];
 
   const pipelineSteps = [
     { label: '文档上传', sub: 'PDF/TXT/MD/DOCX', active: true },
     { label: 'ParserRegistry', sub: 'auto', active: true },
-    { label: 'ChunkingDispatcher', sub: chunkStrategy, active: true },
-    { label: 'EmbeddingProvider', sub: isHash ? 'hash 256d' : provider, active: true },
-    { label: 'VectorStore', sub: indexReady ? `${chunksCount} chunks` : 'no index', active: indexReady },
-    { label: 'RetrievalPipeline', sub: retrievalMode, active: indexReady },
-    { label: 'SourceBuilder', sub: indexReady ? 'ready' : 'pending', active: indexReady },
+    { label: 'ChunkingDispatcher', sub: statusOk ? chunkStrategy : 'unavailable', active: statusOk },
+    { label: 'EmbeddingProvider', sub: statusOk ? (isHash ? 'hash 256d' : provider) : 'unavailable', active: statusOk },
+    { label: 'VectorStore', sub: statusOk ? (indexReady ? `${chunksCount} chunks` : 'no index') : 'unavailable', active: statusOk && !!indexReady },
+    { label: 'RetrievalPipeline', sub: statusOk ? retrievalMode : 'unavailable', active: statusOk && !!indexReady },
+    { label: 'SourceBuilder', sub: statusOk ? (indexReady ? 'ready' : 'pending') : 'unavailable', active: statusOk && !!indexReady },
     { label: 'LLM / Fallback', sub: 'retrieval-only', active: true },
   ];
 
@@ -111,21 +135,31 @@ export function DashboardView({ onNavigate }: Props) {
             基于 Yuxi-style 架构的本地 RAG 知识库系统，支持文档解析、多策略分块、Hash Embedding 演示模式、Hybrid Search、引用溯源与状态可观测。
           </p>
           <div className="flex flex-wrap gap-2 mt-4">
-            <Badge variant={isHash ? 'warning' : 'brand'}>
-              {isHash ? 'Hash Demo Ready' : 'Remote Embedding'}
-            </Badge>
-            <Badge variant={indexReady ? 'success' : 'gray'}>
-              {indexReady ? 'Index Ready' : 'No Index'}
-            </Badge>
-            <Badge variant="brand">Yuxi-style Pipeline</Badge>
-            {statusError && (
-              <button
-                onClick={fetchData}
-                className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold rounded-full border border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
-              >
-                <AlertCircle className="h-3 w-3" />
-                RAG 状态获取失败 · 点击重试
-              </button>
+            {statusError ? (
+              <>
+                <Badge variant="error">
+                  <WifiOff className="h-3 w-3 inline mr-0.5" />
+                  Backend Disconnected
+                </Badge>
+                <button
+                  onClick={fetchData}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold rounded-full border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition-colors"
+                >
+                  <RefreshCw className="h-3 w-3" />
+                  点击重试
+                  {statusErrorMsg && <span className="ml-1 font-normal opacity-70">— {statusErrorMsg}</span>}
+                </button>
+              </>
+            ) : (
+              <>
+                <Badge variant={isHash ? 'warning' : 'brand'}>
+                  {isHash ? 'Hash Demo Ready' : 'Remote Embedding'}
+                </Badge>
+                <Badge variant={indexReady ? 'success' : 'gray'}>
+                  {indexReady ? 'Index Ready' : 'No Index'}
+                </Badge>
+                <Badge variant="brand">Yuxi-style Pipeline</Badge>
+              </>
             )}
           </div>
         </div>
@@ -135,10 +169,10 @@ export function DashboardView({ onNavigate }: Props) {
           {statCards.map((card, i) => (
             <Card
               key={card.label}
-              hover
-              onClick={() => onNavigate(card.view)}
+              hover={card.ok}
+              onClick={() => card.ok && onNavigate(card.view)}
               style={{ animationDelay: `${i * 60}ms`, animationFillMode: 'both' }}
-              className="animate-slide-up"
+              className={`animate-slide-up ${!card.ok ? 'opacity-60' : ''}`}
             >
               <div className="flex items-start justify-between">
                 <div className="min-w-0">
@@ -186,40 +220,57 @@ export function DashboardView({ onNavigate }: Props) {
           {/* Health */}
           <Card>
             <div className="flex items-center gap-2 mb-3">
-              <Shield className={`h-4 w-4 ${health === 'healthy' ? 'text-emerald-500' : health === 'error' ? 'text-red-500' : 'text-amber-500'}`} />
+              <Shield className={`h-4 w-4 ${
+                !statusOk ? 'text-red-500' :
+                health === 'healthy' ? 'text-emerald-500' :
+                health === 'error' ? 'text-red-500' : 'text-amber-500'
+              }`} />
               <h3 className="text-sm font-semibold text-text-primary">系统状态</h3>
             </div>
-            <div className="space-y-2 text-xs">
-              {[
-                { label: '健康状态', value: health, ok: health === 'healthy' },
-                { label: 'Embedding', value: `${provider} · ${ragStatus?.embedding_dim || '—'}d` },
-                { label: 'Chunk 策略', value: chunkStrategy },
-                { label: '文档数', value: totalDocs },
-                { label: 'Chunk 总数', value: chunksCount },
-                { label: '索引就绪', value: indexReady ? '是' : '否', ok: indexReady },
-                { label: '最近索引', value: ragStatus?.last_index_time?.slice(0, 16)?.replace('T', ' ') || '—' },
-              ].map((row) => (
-                <div key={row.label} className="flex justify-between items-center">
-                  <span className="text-text-tertiary">{row.label}</span>
-                  <span className={`font-medium ${row.ok === true ? 'text-emerald-600' : row.ok === false ? 'text-amber-600' : 'text-text-primary'}`}>
-                    {row.value}
-                  </span>
-                </div>
-              ))}
-              {(ragStatus?.warnings?.length ?? 0) > 0 ? (
-                <div className="mt-2 pt-2 border-t border-surface-100">
-                  {ragStatus!.warnings!.map((w: string, i: number) => (
-                    <div key={i} className="text-[11px] text-amber-600 flex items-center gap-1">
-                      <AlertCircle className="h-3 w-3 flex-shrink-0" />{w}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="mt-2 pt-2 border-t border-surface-100 text-[11px] text-text-tertiary">
-                  <Zap className="h-3 w-3 inline mr-1" />暂无警告
-                </div>
-              )}
-            </div>
+            {!statusOk ? (
+              <div className="text-xs text-center py-4 text-text-tertiary">
+                <WifiOff className="h-5 w-5 mx-auto mb-2 opacity-40" />
+                <p>后端未连接</p>
+                <button onClick={fetchData} className="mt-2 text-brand-600 hover:underline">
+                  点击重试
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2 text-xs">
+                {[
+                  { label: '健康状态', value: health === 'healthy' ? 'Healthy' : health, ok: health === 'healthy' },
+                  { label: 'Embedding', value: `${provider} · ${ragStatus?.embedding_dim || '—'}d` },
+                  { label: 'Chunk 策略', value: chunkStrategy },
+                  { label: '文档数', value: documentCount },
+                  { label: 'Chunk 总数', value: chunksCount ?? 0 },
+                  { label: '索引就绪', value: indexReady ? '是' : '否', ok: !!indexReady },
+                  { label: '最近索引', value: ragStatus?.last_index_time?.slice(0, 16)?.replace('T', ' ') || '—' },
+                ].map((row) => (
+                  <div key={row.label} className="flex justify-between items-center">
+                    <span className="text-text-tertiary">{row.label}</span>
+                    <span className={`font-medium ${
+                      row.ok === true ? 'text-emerald-600' :
+                      row.ok === false ? 'text-amber-600' : 'text-text-primary'
+                    }`}>
+                      {row.value}
+                    </span>
+                  </div>
+                ))}
+                {(ragStatus?.warnings?.length ?? 0) > 0 ? (
+                  <div className="mt-2 pt-2 border-t border-surface-100">
+                    {ragStatus!.warnings!.map((w: string, i: number) => (
+                      <div key={i} className="text-[11px] text-amber-600 flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3 flex-shrink-0" />{w}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-2 pt-2 border-t border-surface-100 text-[11px] text-text-tertiary">
+                    <Zap className="h-3 w-3 inline mr-1" />暂无警告
+                  </div>
+                )}
+              </div>
+            )}
           </Card>
         </div>
 
@@ -267,7 +318,8 @@ export function DashboardView({ onNavigate }: Props) {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-text-tertiary mt-0.5">→</span>
-                  生产使用请将 <code className="bg-surface-100 px-1 rounded text-[11px]">EMBEDDING_PROVIDER</code> 设为 <code className="bg-surface-100 px-1 rounded text-[11px]">openai</code> 并配置 Embedding API
+                  生产使用请将 <code className="bg-surface-100 px-1 rounded text-[11px]">EMBEDDING_PROVIDER</code> 设为
+                  <code className="bg-surface-100 px-1 rounded text-[11px]">openai_compatible</code> 或 <code className="bg-surface-100 px-1 rounded text-[11px]">dashscope</code>，并配置对应的 Embedding API
                 </li>
               </ul>
             </div>

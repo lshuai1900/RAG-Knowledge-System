@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ViewType } from './AppLayout';
 import {
   LayoutDashboard, BookOpen, FileText, MessageSquare,
-  Cpu, Brain, Loader2,
+  Cpu, Brain, Loader2, WifiOff,
 } from 'lucide-react';
 import { getRagStatus } from '../../api/rag';
 import type { RagStatus } from '../../types';
@@ -22,19 +22,32 @@ interface Props {
 
 export function Sidebar({ currentView, onNavigate }: Props) {
   const [status, setStatus] = useState<RagStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoading(true);
+    setError(false);
     getRagStatus()
-      .then((s) => { if (!cancelled) setStatus(s); })
-      .catch(() => {});
+      .then((s) => { if (!cancelled) { setStatus(s); setLoading(false); } })
+      .catch(() => { if (!cancelled) { setError(true); setLoading(false); } });
     return () => { cancelled = true; };
   }, []);
 
   const provider = status?.embedding_provider || '—';
   const retrieval = status?.retrieval_mode || status?.RAG_RETRIEVAL_MODE || '—';
   const indexReady = status?.index_ready ?? false;
-  const statusLine = `${provider} · ${retrieval} · ${indexReady ? 'indexed' : 'no index'}`;
+  const statusLine = error
+    ? 'backend offline'
+    : loading
+      ? 'loading...'
+      : `${provider} · ${retrieval} · ${indexReady ? 'indexed' : 'no index'}`;
+
+  const iconColor = error ? 'bg-red-100 text-red-600'
+    : indexReady ? 'bg-emerald-100 text-emerald-600'
+    : 'bg-amber-100 text-amber-600';
 
   return (
     <aside className="flex h-full w-64 flex-col bg-white border-r border-surface-200">
@@ -77,16 +90,16 @@ export function Sidebar({ currentView, onNavigate }: Props) {
 
       {/* Footer status — real data from RAG status API */}
       <div className="px-3 py-4 border-t border-surface-100 space-y-2">
-        <div className="flex items-center gap-2 px-2 py-2 rounded-lg bg-surface-50">
-          <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${
-            indexReady ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'
-          }`}>
-            {status ? <Cpu className="h-3.5 w-3.5" /> : <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+        <div className={`flex items-center gap-2 px-2 py-2 rounded-lg bg-surface-50`}>
+          <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${iconColor}`}>
+            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              : error ? <WifiOff className="h-3.5 w-3.5" />
+              : <Cpu className="h-3.5 w-3.5" />}
           </div>
           <div className="min-w-0">
             <div className="text-[11px] font-medium text-text-primary">RAG Engine</div>
             <div className="text-[10px] text-text-tertiary truncate" title={statusLine}>
-              {status ? statusLine : 'loading...'}
+              {statusLine}
             </div>
           </div>
         </div>

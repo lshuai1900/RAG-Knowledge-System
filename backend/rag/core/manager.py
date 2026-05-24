@@ -28,6 +28,14 @@ BACKEND_DIR = Path(__file__).resolve().parents[2]
 RAG_DATA_DIR = BACKEND_DIR / "rag" / "data"
 
 
+def _get_stores():
+    from rag.storage.document_store import DocumentStore, ChunkStore, VectorStore
+    ds = DocumentStore(RAG_DATA_DIR)
+    cs = ChunkStore(RAG_DATA_DIR)
+    vs = VectorStore(RAG_DATA_DIR)
+    return ds, cs, vs
+
+
 class KnowledgeBaseManager:
     """Main entry point for all RAG knowledge base operations."""
 
@@ -114,10 +122,15 @@ class KnowledgeBaseManager:
 
         # Chunk
         chunker = rag_factory.get_chunker(resolved, ext.lstrip("."))
+        parser_name = (
+            getattr(parse_result, "parser_name", None)
+            or (parse_result.metadata or {}).get("parser", "")
+            or "unknown"
+        )
         chunks = chunker.chunk(parse_result.text, {
             "doc_id": doc_id, "kb_id": kb_id,
             "filename": fname, "file_type": ext.lstrip("."),
-            "parser_name": parse_result.parser_name,
+            "parser_name": parser_name,
         })
 
         # Save chunks
@@ -125,28 +138,18 @@ class KnowledgeBaseManager:
         return chunks
 
     async def build_index(self, kb_id: str, doc_ids: list[str] | None = None) -> dict:
-        """Build/rebuild vector index for a KB."""
-        all_chunks = self._load_chunks(kb_id, doc_ids)
+        """Build/rebuild vector index for a KB using storage classes."""
+        _, chunk_store, vector_store = _get_stores()
+        all_chunks = chunk_store.load(kb_id, doc_ids)
         if not all_chunks:
             return {"chunks": 0, "status": "empty"}
 
         provider = rag_factory.get_embedding_provider()
         embed_result = await provider.embed(all_chunks)
 
-        # Save embeddings
-        emb_path = self.data_dir / kb_id / "embeddings.npy"
-        meta_path = self.data_dir / kb_id / "index_meta.json"
-        import numpy as np
-        arr = np.array(embed_result.embeddings, dtype=np.float32)
-        np.save(str(emb_path), arr)
-        meta_path.write_text(json.dumps({
-            "chunk_ids": [c.chunk_id for c in all_chunks],
-            "dimension": provider.dimension,
-            "model": provider.model_name,
-            "provider": provider.name,
-            "chunk_count": len(all_chunks),
-            "built_at": datetime.now(timezone.utc).isoformat(),
-        }, ensure_ascii=False, indent=2), encoding="utf-8")
+        vector_store.save(kb_id, embed_result.embeddings,
+                          [c.chunk_id for c in all_chunks],
+                          provider.dimension, provider.model_name, provider.name)
 
         return {"chunks": len(all_chunks), "status": "built",
                 "dimension": provider.dimension}
@@ -154,48 +157,13 @@ class KnowledgeBaseManager:
     # ── Retrieval ───────────────────────────────────────────────────
 
     async def search(self, kb_id: str, query: str, top_k: int = 5) -> list[RetrievalResult]:
-        import numpy as np
-
-        emb_path = self.data_dir / kb_id / "embeddings.npy"
-        meta_path = self.data_dir / kb_id / "index_meta.json"
-        if not emb_path.exists() or not meta_path.exists():
-            raise IndexNotReadyError(f"Index not built for KB {kb_id}")
-
+        """Search using the unified RetrievalPipeline."""
+        _, chunk_store, vector_store = _get_stores()
         provider = rag_factory.get_embedding_provider()
-        chunk_records = self._load_chunks(kb_id)
 
-        # Single-query embedding
-        query_embedding = await provider._embed_text(query)
-
-        # Cosine similarity search
-        embeddings = np.load(str(emb_path))
-        query_vec = np.array(query_embedding, dtype=np.float32)
-        query_norm = query_vec / (np.linalg.norm(query_vec) + 1e-8)
-        emb_norm = embeddings / (np.linalg.norm(embeddings, axis=1, keepdims=True) + 1e-8)
-        scores = emb_norm @ query_norm
-        top_indices = np.argsort(scores)[::-1][:top_k]
-
-        retrieval_mode = os.getenv("RAG_RETRIEVAL_MODE", "dense")
-        fusion = os.getenv("RAG_HYBRID_FUSION", "rrf")
-
-        results = []
-        for rank, idx in enumerate(top_indices):
-            score = float(scores[idx])
-            if score <= 0:
-                continue
-            chunk = chunk_records[int(idx)] if int(idx) < len(chunk_records) else None
-            results.append(RetrievalResult(
-                chunk_id=chunk.chunk_id if chunk else f"chunk_{idx}",
-                chunk_text=chunk.text if chunk else "",
-                score=round(score, 6),
-                dense_score=round(score, 6),
-                rank=rank + 1,
-                retrieval_mode=retrieval_mode,
-                hybrid_fusion=fusion if retrieval_mode == "hybrid" else "",
-                metadata=chunk.metadata if chunk else {},
-            ))
-
-        return results
+        from rag.retrieval.pipeline import RetrievalPipeline
+        pipeline = RetrievalPipeline(provider, chunk_store, vector_store)
+        return await pipeline.retrieve(kb_id, query, top_k)
 
     def build_sources(self, results: list[RetrievalResult],
                       chunks: list[ChunkRecord]) -> list[SourceRecord]:
@@ -230,12 +198,20 @@ class KnowledgeBaseManager:
     def get_status(self) -> RagStatusInfo:
         provider = rag_factory.get_embedding_provider()
         total_chunks = 0
+        total_docs = 0
         all_chunks_ok = True
-        for kb_id in self._metadata:
+        kb_dirs = list(self.data_dir.iterdir()) if self.data_dir.exists() else []
+        # Also include KBs from in-memory metadata
+        known_ids = set(d.name for d in kb_dirs if d.is_dir()) | set(self._metadata.keys())
+        for kb_id in known_ids:
             chunks = self._load_chunks(kb_id)
             total_chunks += len(chunks)
+            docs_dir = self.data_dir / kb_id / "docs"
+            if docs_dir.exists():
+                total_docs += len(list(docs_dir.glob("*.json")))
             if not (self.data_dir / kb_id / "embeddings.npy").exists():
-                all_chunks_ok = False
+                if chunks:
+                    all_chunks_ok = False
 
         return RagStatusInfo(
             rag_engine=os.getenv("RAG_ENGINE", "rag_lab"),
@@ -252,11 +228,7 @@ class KnowledgeBaseManager:
             use_rerank=os.getenv("RAG_USE_RERANK", "false").lower() in {"1", "true"},
             rerank_model=os.getenv("RERANKER_MODEL", ""),
             rerank_top_n=int(os.getenv("RAG_RERANK_TOP_N", "5")),
-            documents_count=sum(
-                len(list((self.data_dir / kb_id / "docs").glob("*.json")))
-                if (self.data_dir / kb_id / "docs").exists() else 0
-                for kb_id in self._metadata
-            ),
+            documents_count=total_docs,
             chunks_count=total_chunks,
             index_ready=all_chunks_ok and total_chunks > 0,
             last_index_time=self._read_last_index_time(),
@@ -286,29 +258,16 @@ class KnowledgeBaseManager:
             json.dumps(dataclasses.asdict(record), ensure_ascii=False, indent=2))
 
     def _save_doc_meta(self, kb_id: str, doc_id: str, record: DocumentRecord) -> None:
-        docs_dir = self.data_dir / kb_id / "docs"
-        docs_dir.mkdir(parents=True, exist_ok=True)
-        (docs_dir / f"{doc_id}.json").write_text(
-            json.dumps(dataclasses.asdict(record), ensure_ascii=False, indent=2))
+        doc_store, _, _ = _get_stores()
+        doc_store.save(kb_id, record)
 
     def _save_chunks(self, kb_id: str, doc_id: str, chunks: list[ChunkRecord]) -> None:
-        chunks_dir = self.data_dir / kb_id / "chunks"
-        chunks_dir.mkdir(parents=True, exist_ok=True)
-        (chunks_dir / f"{doc_id}.json").write_text(
-            json.dumps([c.to_dict() for c in chunks], ensure_ascii=False, indent=2))
+        _, chunk_store, _ = _get_stores()
+        chunk_store.save(kb_id, doc_id, chunks)
 
     def _load_chunks(self, kb_id: str, doc_ids: list[str] | None = None) -> list[ChunkRecord]:
-        chunks_dir = self.data_dir / kb_id / "chunks"
-        if not chunks_dir.exists():
-            return []
-        all_chunks = []
-        for f in chunks_dir.glob("*.json"):
-            if doc_ids and f.stem not in doc_ids:
-                continue
-            rows = json.loads(f.read_text())
-            for row in rows:
-                all_chunks.append(ChunkRecord(**row))
-        return all_chunks
+        _, chunk_store, _ = _get_stores()
+        return chunk_store.load(kb_id, doc_ids)
 
     def _read_last_index_time(self) -> str | None:
         for kb_id in self._metadata:

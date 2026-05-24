@@ -1,3 +1,14 @@
+"""
+Legacy RAG service wrapper.
+
+New RAG pipeline is implemented in backend/rag/.
+This module is kept for backward compatibility with the Milvus / hybrid
+search paths and is only called as a fallback from chat.py when
+rag.service is unavailable.
+
+TODO: Remove when rag.service fully replaces all retrieval paths.
+"""
+
 import logging
 import os
 from typing import AsyncIterator

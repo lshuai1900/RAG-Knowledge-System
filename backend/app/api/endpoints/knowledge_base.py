@@ -63,18 +63,42 @@ async def delete_kb(kb_id: str, service: KnowledgeBaseService = Depends(get_kb_s
 async def rebuild_index(
     kb_id: str,
     kb_service: KnowledgeBaseService = Depends(get_kb_service),
-    ingestion_service: IngestionService = Depends(get_ingestion_service),
 ):
-    """Rebuild the entire vector and BM25 index for a knowledge base.
+    """Rebuild the entire vector index via rag.service (Yuxi-style).
 
-    Re-processes all original documents: parse, chunk, embed, insert to
-    Milvus, and rebuild BM25.  Documents whose original files are missing
-    are reported in failed_documents without aborting the whole rebuild.
+    All documents in the KB are re-parsed, re-chunked, re-embedded,
+    and the vector index is rewritten.  Uses EMBEDDING_PROVIDER from env.
     """
     kb = await kb_service.get_by_id(kb_id)
     if not kb:
         raise NotFoundException("Knowledge base", kb_id)
-    return await ingestion_service.rebuild_kb_index(kb_id)
+
+    try:
+        from rag.service import rag_service
+        result = await rag_service.rebuild_index(kb_id)
+        return {
+            "status": result.get("status", "completed"),
+            "kb_id": kb_id,
+            "document_count": result.get("document_count", 0),
+            "success_documents": result.get("success_documents", 0),
+            "failed_documents": result.get("failed_documents", []),
+            "chunk_count": result.get("chunk_count", 0),
+            "bm25_chunk_count": 0,
+            "warnings": result.get("warnings", []),
+        }
+    except Exception as exc:
+        logger = __import__("logging").getLogger(__name__)
+        logger.exception("rebuild-index via rag.service failed")
+        return {
+            "status": "failed",
+            "kb_id": kb_id,
+            "document_count": 0,
+            "success_documents": 0,
+            "failed_documents": [{"doc_id": "", "filename": "", "error": str(exc)}],
+            "chunk_count": 0,
+            "bm25_chunk_count": 0,
+            "warnings": [str(exc)],
+        }
 
 
 @router.get("/{kb_id}/index-status", response_model=IndexStatusResponse)
@@ -91,6 +115,20 @@ async def get_index_status(
     if not kb:
         raise NotFoundException("Knowledge base", kb_id)
 
+    # Prefer rag.service for status; fall back to legacy rag_lab adapter
+    try:
+        from rag.service import rag_service
+        status = rag_service.get_status()
+        return {
+            "kb_id": kb_id,
+            "document_count": status.get("documents_count", 0),
+            "chunk_count": status.get("chunks_count", 0),
+            "bm25_chunk_count": 0,
+            "bm25_index_exists": False,
+            "documents_by_status": {},
+        }
+    except Exception:
+        pass
     if os.getenv("RAG_ENGINE", "rag_lab").strip().lower() == "rag_lab":
         from app.services.rag_lab_adapter_service import RagLabAdapterService
         return await RagLabAdapterService().get_index_status(kb_id)

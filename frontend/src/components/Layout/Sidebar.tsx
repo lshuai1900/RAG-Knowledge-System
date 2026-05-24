@@ -1,12 +1,11 @@
+import { useEffect, useState } from 'react';
 import type { ViewType } from './AppLayout';
 import {
-  LayoutDashboard,
-  BookOpen,
-  FileText,
-  MessageSquare,
-  Cpu,
-  Brain,
+  LayoutDashboard, BookOpen, FileText, MessageSquare,
+  Cpu, Brain, Loader2,
 } from 'lucide-react';
+import { getRagStatus } from '../../api/rag';
+import type { RagStatus } from '../../types';
 
 const navItems: { id: ViewType; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'dashboard', label: '总览', icon: LayoutDashboard },
@@ -22,6 +21,21 @@ interface Props {
 }
 
 export function Sidebar({ currentView, onNavigate }: Props) {
+  const [status, setStatus] = useState<RagStatus | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getRagStatus()
+      .then((s) => { if (!cancelled) setStatus(s); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  const provider = status?.embedding_provider || '—';
+  const retrieval = status?.retrieval_mode || status?.RAG_RETRIEVAL_MODE || '—';
+  const indexReady = status?.index_ready ?? false;
+  const statusLine = `${provider} · ${retrieval} · ${indexReady ? 'indexed' : 'no index'}`;
+
   return (
     <aside className="flex h-full w-64 flex-col bg-white border-r border-surface-200">
       {/* Brand */}
@@ -61,15 +75,19 @@ export function Sidebar({ currentView, onNavigate }: Props) {
         })}
       </nav>
 
-      {/* Footer status */}
+      {/* Footer status — real data from RAG status API */}
       <div className="px-3 py-4 border-t border-surface-100 space-y-2">
         <div className="flex items-center gap-2 px-2 py-2 rounded-lg bg-surface-50">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600">
-            <Cpu className="h-3.5 w-3.5" />
+          <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${
+            indexReady ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'
+          }`}>
+            {status ? <Cpu className="h-3.5 w-3.5" /> : <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           </div>
           <div className="min-w-0">
             <div className="text-[11px] font-medium text-text-primary">RAG Engine</div>
-            <div className="text-[10px] text-text-tertiary">Hybrid Search + Rerank</div>
+            <div className="text-[10px] text-text-tertiary truncate" title={statusLine}>
+              {status ? statusLine : 'loading...'}
+            </div>
           </div>
         </div>
         <p className="text-[10px] text-text-tertiary text-center">

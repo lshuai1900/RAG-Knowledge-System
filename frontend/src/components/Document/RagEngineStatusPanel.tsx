@@ -98,18 +98,18 @@ export function RagEngineStatusPanel() {
 
   const configItems = useMemo(() => {
     if (!data) return [];
-    const items = [
-      { label: '当前引擎', value: data.RAG_ENGINE ?? data.rag_engine },
-      { label: '分块策略', value: data.CHUNK_STRATEGY ?? data.chunk_strategy },
-      { label: '检索模式', value: data.RAG_RETRIEVAL_MODE ?? data.retrieval_mode },
-      { label: '融合方式', value: data.RAG_HYBRID_FUSION ?? data.hybrid_fusion },
-      { label: 'Rerank', value: data.RAG_USE_RERANK ?? data.use_rerank },
-      { label: 'Rerank Top N', value: data.RAG_RERANK_TOP_N ?? data.rerank_top_n },
+    const items: { label: string; value: string | number | boolean }[] = [
+      { label: '当前引擎', value: (data.RAG_ENGINE ?? data.rag_engine ?? '—') as string | number | boolean },
+      { label: '分块策略', value: (data.CHUNK_STRATEGY ?? data.chunk_strategy ?? '—') as string | number | boolean },
+      { label: '检索模式', value: (data.RAG_RETRIEVAL_MODE ?? data.retrieval_mode ?? '—') as string | number | boolean },
+      { label: '融合方式', value: (data.RAG_HYBRID_FUSION ?? data.hybrid_fusion ?? '—') as string | number | boolean },
+      { label: 'Rerank', value: (data.RAG_USE_RERANK ?? data.use_rerank ?? false) as string | number | boolean },
+      { label: 'Rerank Top N', value: (data.RAG_RERANK_TOP_N ?? data.rerank_top_n ?? 0) as string | number | boolean },
     ];
     // Add new structured fields when available
     if (data.chunk_size != null) {
       items.push({ label: '分块大小', value: data.chunk_size });
-      items.push({ label: '分块重叠', value: data.chunk_overlap });
+      items.push({ label: '分块重叠', value: data.chunk_overlap ?? 0 });
     }
     if (data.embedding_model) {
       items.push({ label: 'Embedding', value: data.embedding_model });
